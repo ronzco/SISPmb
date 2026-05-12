@@ -1,0 +1,6 @@
+{
+  "name": "SiPMB Online",
+  "description": "Sistem Informasi Pendaftaran Mahasiswa Baru (SiPMB) Online terpadu dengan fitur registrasi data, manajemen berkas, simulasi pembayaran VA, dan pengumuman seleksi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

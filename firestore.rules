@@ -1,0 +1,136 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny ALL
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role check: In a real app, you'd check a dedicated 'admin' collection
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'superadmin';
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidUser(data) {
+      return data.uid == request.auth.uid 
+             && data.fullName is string && data.fullName.size() <= 100
+             && data.email is string && data.email.size() <= 100
+             && data.role in ['applicant', 'superadmin', 'committee_academic', 'committee_finance']
+             && (data.keys().hasAll(['uid', 'fullName', 'email', 'role']) && data.keys().size() >= 4);
+    }
+
+    function isValidApplication(data) {
+      return data.userId == request.auth.uid
+             && data.status in ['draft', 'submitted', 'verifying', 'accepted', 'rejected']
+             && (data.keys().hasAll(['userId', 'status']) && data.keys().size() >= 2);
+    }
+
+    function isValidDocument(data) {
+      return data.userId == request.auth.uid
+             && data.url is string && data.url.size() <= 500
+             && data.type is string
+             && (data.keys().hasAll(['userId', 'url', 'type']) && data.keys().size() >= 3);
+    }
+
+    function isValidPayment(data) {
+      return data.userId == request.auth.uid
+             && data.amount is number && data.amount > 0
+             && (data.keys().hasAll(['userId', 'amount', 'status']) && data.keys().size() >= 3);
+    }
+
+    // --- Matches ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin(); // Only admins can list users. Note: query by UID is still a list op.
+      // Wait, if I want applicants to query their own profile:
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) 
+                     && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'phone', 'role', 'email', 'uid', 'createdAt']);
+    }
+
+    match /applications/{appId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid) && isValidApplication(incoming());
+      allow update: if isSignedIn() && (
+        (isOwner(existing().userId) && incoming().userId == request.auth.uid && isValidApplication(incoming()) && 
+         incoming().diff(existing()).affectedKeys().hasOnly([
+           'fullName', 'birthPlace', 'birthDate', 'gender', 'address', 'phone', 
+           'previousSchool', 'gradYear', 'program', 'major', 'updatedAt', 'status', 'submittedAt', 'id', 'userId', 'participantNumber'
+         ]))
+        || isAdmin()
+      );
+    }
+
+    match /documents/{docId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid) && isValidDocument(incoming());
+      allow update: if isSignedIn() && (
+        (isOwner(existing().userId) && (incoming().userId == request.auth.uid) && isValidDocument(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['url', 'status']))
+        || isAdmin()
+      );
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /payments/{payId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid) && isValidPayment(incoming());
+      allow update: if isAdmin();
+    }
+
+    match /announcements/{annId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /fees_config/{feeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /logs/{logId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || adminId == 'v8Xy6H...'; // Replace with real bootstrap logic or keep for first user
+      // For this app, let's allow the specific user email to be admin if they are the first one, 
+      // or just allow the current user to stay as admin if they already are.
+      // Re-enabling a safe bootstrap:
+      allow write: if isSignedIn() && (isAdmin() || request.auth.token.email == 'ronikoswara795@gmail.com');
+    }
+  }
+}

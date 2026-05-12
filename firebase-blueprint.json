@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public and private user information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["applicant", "superadmin", "committee_academic", "committee_finance"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "email", "role"]
+    },
+    "Application": {
+      "title": "Student Application",
+      "description": "The core registration data for a student",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "participantNumber": { "type": "string" },
+        "program": { "type": "string" },
+        "major": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "verifying", "accepted", "rejected"] },
+        "score": { "type": "number" },
+        "reRegistrationPaid": { "type": "boolean" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "status"]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "System audit trail",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Document": {
+      "title": "Required Document",
+      "description": "Files uploaded by the student",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "url": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Payment": {
+      "title": "Payment Record",
+      "description": "Registration fee payment details",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "success", "failed"] },
+        "transactionId": { "type": "string" },
+        "paidAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "General or targeted system announcements",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "warning", "urgent"] },
+        "createdAt": { "type": "number" }
+      }
+    },
+    "FeeConfig": {
+      "title": "Fee Configuration",
+      "description": "Registration and tuition fee settings",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles"
+    },
+    "applications/{appId}": {
+      "schema": "Application",
+      "description": "Stores individual student applications"
+    },
+    "documents/{docId}": {
+      "schema": "Document",
+      "description": "Stores metadata for uploaded documents"
+    },
+    "payments/{payId}": {
+      "schema": "Payment",
+      "description": "Stores payment history"
+    },
+    "announcements/{annId}": {
+      "schema": "Announcement",
+      "description": "Stores system announcements"
+    },
+    "fees_config/{feeId}": {
+      "schema": "FeeConfig",
+      "description": "Stores fee configurations"
+    },
+    "logs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "System audit trails"
+    },
+    "admins/{userId}": {
+      "schema": "User",
+      "description": "Explicit admin list with specific roles (superadmin, committee_academic, committee_finance)"
+    }
+  }
+}
