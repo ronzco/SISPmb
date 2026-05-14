@@ -87,6 +87,7 @@ export async function getDb() {
           amount DECIMAL(15,2) NOT NULL,
           method VARCHAR(100) NOT NULL,
           status VARCHAR(50) NOT NULL DEFAULT 'pending',
+          category VARCHAR(100) NOT NULL DEFAULT 'registration',
           transaction_id VARCHAR(255) NOT NULL,
           paid_at TIMESTAMP NULL
         )
@@ -141,6 +142,14 @@ export async function getDb() {
             console.warn(`⚠️ Gagal menambah kolom ${col.name}: ${e.message}`);
           }
         }
+      }
+
+      // Sync columns for payments
+      const [payRows]: any = await connection.execute("SHOW COLUMNS FROM payments");
+      const payColumns = payRows.map((r: any) => r.Field);
+      if (!payColumns.includes('category')) {
+        await connection.execute("ALTER TABLE payments ADD COLUMN category VARCHAR(100) DEFAULT 'registration'");
+        console.log("✅ Ditambahkan kolom 'category' ke tabel payments (MySQL)");
       }
 
       // Check if announcements table has type field
@@ -212,6 +221,13 @@ export async function getDb() {
         sqlite.exec("ALTER TABLE applications ADD COLUMN re_registration_paid INTEGER DEFAULT 0;");
       }
 
+      // Migration: Add category to payments if missing
+      const payCols = sqlite.prepare("PRAGMA table_info(payments)").all() as any[];
+      if (!payCols.find(c => c.name === 'category')) {
+        sqlite.exec("ALTER TABLE payments ADD COLUMN category TEXT DEFAULT 'registration';");
+        console.log("✅ Ditambahkan kolom 'category' ke tabel payments (SQLite)");
+      }
+
       sqlite.exec(`
         CREATE TABLE IF NOT EXISTS documents (
           id TEXT PRIMARY KEY,
@@ -227,6 +243,7 @@ export async function getDb() {
           amount DECIMAL(15,2) NOT NULL,
           method TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'pending',
+          category TEXT NOT NULL DEFAULT 'registration',
           transaction_id TEXT NOT NULL,
           paid_at DATETIME
         );
