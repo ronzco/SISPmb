@@ -64,23 +64,45 @@ export default function Dashboard() {
 
   const getStepStatus = (index: number) => {
     if (!application) return index === 0 ? 'current' : 'pending';
-    if (index === 0) return 'completed';
+    
     const isDocsDone = docs.length >= 4;
     const isPaid = payments.some(p => (p.category === 'registration' || !p.category) && p.status === 'success');
+    const appStatus = application.status;
 
-    if (index === 1) return isDocsDone ? 'completed' : (isPaid ? 'current' : 'pending');
-    if (index === 2) return isPaid ? 'completed' : 'current';
+    // Step 0: Registrasi
+    if (index === 0) return 'completed';
+
+    // Step 1: Unggah Berkas
+    if (index === 1) {
+      if (isDocsDone) return 'completed';
+      return 'current';
+    }
+
+    // Step 2: Pembayaran
+    if (index === 2) {
+      if (isPaid) return 'completed';
+      return isDocsDone ? 'current' : 'pending';
+    }
+
+    // Step 3: Verifikasi
     if (index === 3) {
-      if (application.status === 'verifying') return 'current';
-      if (['test_ready', 'accepted', 'rejected'].includes(application.status)) return 'completed';
+      if (['test_ready', 'accepted', 'rejected'].includes(appStatus)) return 'completed';
+      if (appStatus === 'verifying' || (isPaid && isDocsDone)) return 'current';
       return 'pending';
     }
+
+    // Step 4: Seleksi Tulis
     if (index === 4) {
-      if (application.status === 'test_ready' || application.selectionCode) return 'current';
-      if (['accepted', 'rejected'].includes(application.status)) return 'completed';
+      if (['accepted', 'rejected'].includes(appStatus)) return 'completed';
+      if (appStatus === 'test_ready') return 'current';
       return 'pending';
     }
-    if (index === 5) return ['accepted', 'rejected'].includes(application.status) ? 'completed' : 'pending';
+
+    // Step 5: Hasil Seleksi
+    if (index === 5) {
+      return ['accepted', 'rejected'].includes(appStatus) ? 'completed' : 'pending';
+    }
+
     return 'pending';
   };
 
@@ -264,7 +286,14 @@ export default function Dashboard() {
             <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-slate-100 dark:bg-slate-800/50 -translate-y-1/2 -z-0 rounded-full"></div>
             <div 
                className="absolute top-1/2 left-0 h-[2px] bg-blue-600 -translate-y-1/2 -z-0 rounded-full transition-all duration-1000"
-               style={{ width: `${(Math.max(0, steps.findIndex((_, i) => getStepStatus(i) === 'current')) / (steps.length - 1)) * 100}%` }}
+               style={{ width: `${(() => {
+                 const current = steps.findIndex((_, i) => getStepStatus(i) === 'current');
+                 if (current !== -1) return (current / (steps.length - 1)) * 100;
+                 const allCompleted = steps.every((_, i) => getStepStatus(i) === 'completed');
+                 if (allCompleted) return 100;
+                 const lastCompleted = [...Array(steps.length)].map((_, i) => i).reverse().find(i => getStepStatus(i) === 'completed');
+                 return lastCompleted !== undefined ? (lastCompleted / (steps.length - 1)) * 100 : 0;
+               })()}%` }}
             ></div>
             
             {steps.map((step, index) => {
