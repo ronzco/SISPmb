@@ -44,6 +44,7 @@ export default function Shell({ user, profile }: ShellProps) {
 
   const isAdminRole = profile?.role && profile.role !== 'applicant';
 
+  const [hasApplication, setHasApplication] = useState(false);
   const [appStatus, setAppStatus] = useState<string | null>(null);
 
   useEffect(() => {

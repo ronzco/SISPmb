@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { dataApi } from '../lib/api';
 import { PaymentRecord, StudentApplication, FeeConfig } from '../types';
 import { motion } from 'motion/react';
-import { CreditCard, CheckCircle2, Clock, AlertCircle, RefreshCw, Copy, ExternalLink, Download, Loader2 } from 'lucide-react';
+import { CreditCard, CheckCircle2, Clock, AlertCircle, RefreshCw, Copy, ExternalLink, Download, Loader2, QrCode } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Payment() {

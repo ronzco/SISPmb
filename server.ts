@@ -5,10 +5,10 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { Resend } from "resend";
-import authRoutes from "./src/server/authRoutes";
-import dataRoutes from "./src/server/dataRoutes";
-import adminRoutes from "./src/server/adminRoutes";
-import { getDb } from "./src/db/db";
+import authRoutes from "./src/server/authRoutes.js";
+import dataRoutes from "./src/server/dataRoutes.js";
+import adminRoutes from "./src/server/adminRoutes.js";
+import { getDb } from "./src/db/db.js";
 
 // Handle ESM/CJS compatibility for paths
 const __filename = fileURLToPath(import.meta.url);

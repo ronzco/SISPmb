@@ -1,8 +1,8 @@
 import express from "express";
-import { getDb } from "../db/db";
-import { announcements, applications, documents, payments, feeConfigs } from "../db/schema";
+import { getDb } from "../db/db.js";
+import { announcements, applications, documents, payments, feeConfigs } from "../db/schema.js";
 import { eq, desc } from "drizzle-orm";
-import { authenticate, AuthRequest, authorize } from "./middleware";
+import { authenticate, AuthRequest, authorize } from "./middleware.js";
 import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();

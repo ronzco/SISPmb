@@ -1,8 +1,8 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { getDb } from "../db/db";
-import { users } from "../db/schema";
+import { getDb } from "../db/db.js";
+import { users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 

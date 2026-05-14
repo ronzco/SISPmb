@@ -1,10 +1,10 @@
 import express from 'express';
-import { getDb } from '../db/db';
-import { applications, announcements, feeConfigs, users, documents, activityLogs, payments } from '../db/schema';
+import { getDb } from '../db/db.js';
+import { applications, announcements, feeConfigs, users, documents, activityLogs, payments } from '../db/schema.js';
 import { eq, desc } from 'drizzle-orm';
-import { authenticate, authorize } from './middleware';
+import { authenticate, authorize } from './middleware.js';
 import { v4 as uuidv4 } from 'uuid';
-import { sendEmail, sendWhatsApp } from './notificationService';
+import { sendEmail, sendWhatsApp } from './notificationService.js';
 
 const router = express.Router();
 

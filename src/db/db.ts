@@ -2,7 +2,7 @@ import { drizzle as drizzleMysql } from "drizzle-orm/mysql2";
 import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
 import mysql from "mysql2/promise";
 import Database from "better-sqlite3";
-import * as schema from "./schema";
+import * as schema from "./schema.js";
 
 export let db: any = null;
 let isSqlite = false;
