@@ -1,6 +1,6 @@
 import express from 'express';
 import { getDb } from '../db/db';
-import { applications, announcements, feeConfigs, users, documents, activityLogs } from '../db/schema';
+import { applications, announcements, feeConfigs, users, documents, activityLogs, payments } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { authenticate, authorize } from './middleware';
 import { v4 as uuidv4 } from 'uuid';
@@ -38,6 +38,18 @@ router.patch('/documents/:id/status', authenticate, authorize(['admin', 'superad
     res.json({ message: 'Document status updated' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update document status' });
+  }
+});
+
+// Update payment status
+router.patch('/payments/:id/status', authenticate, authorize(['admin', 'superadmin', 'committee_finance']), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { status } = req.body;
+    await db.update(payments).set({ status, paidAt: status === 'success' ? new Date() : undefined }).where(eq(payments.id, req.params.id));
+    res.json({ message: 'Payment status updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update payment status' });
   }
 });
 

@@ -1,5 +1,5 @@
 export type ApplicationStatus = 'draft' | 'submitted' | 'verifying' | 'test_ready' | 'accepted' | 'rejected';
-export type UserRole = 'applicant' | 'superadmin' | 'committee_academic' | 'committee_finance';
+export type UserRole = 'applicant' | 'admin' | 'superadmin' | 'committee_academic' | 'committee_finance';
 
 export interface UserProfile {
   uid: string;

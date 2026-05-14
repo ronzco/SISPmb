@@ -8,6 +8,7 @@ import { authApi } from '../lib/api';
 export default function Login() {
   const [role, setRole] = useState<'applicant' | 'admin'>('applicant');
   const [loading, setLoading] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'email' | 'google' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   
@@ -18,6 +19,7 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    setLoginMethod('email');
 
     try {
       const response = await authApi.login({ email, password });
@@ -38,6 +40,7 @@ export default function Login() {
       setError(err.response?.data?.error || err.message || 'Gagal masuk. Periksa email dan password Anda.');
     } finally {
       setLoading(false);
+      setLoginMethod(null);
     }
   };
 

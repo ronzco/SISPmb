@@ -1049,11 +1049,15 @@ export default function AdminDashboard() {
                            {hasPermission('manage_finance') && (
                               <button 
                                  onClick={async () => {
-                                    const payRef = doc(db, 'payments', appPayment?.id || '');
                                     if (appPayment) {
-                                      await setDoc(payRef, { status: 'success', paidAt: Date.now() }, { merge: true });
-                                      alert('Transaction verified successfully.');
-                                      fetchDetails(selectedApp);
+                                      try {
+                                        await dataApi.updatePaymentStatus(appPayment.id, 'success');
+                                        alert('Transaction verified successfully.');
+                                        fetchDetails(selectedApp!);
+                                      } catch (error) {
+                                        console.error("Verification error:", error);
+                                        alert("Failed to verify transaction.");
+                                      }
                                     }
                                  }}
                                  className="w-full py-4 md:py-5 bg-indigo-900 text-white rounded-xl md:rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-950 transition-all active:scale-95 disabled:opacity-30 uppercase"

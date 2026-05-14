@@ -28,6 +28,7 @@ export default function Registration() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [appStatus, setAppStatus] = useState<ApplicationStatus>('draft');
   const [appId, setAppId] = useState<string | null>(null);
+  const selectedFaculty = FACULTIES.find(f => f.id === formData.program);
 
   useEffect(() => {
     const fetchExistingData = async () => {
@@ -88,6 +89,16 @@ export default function Registration() {
   };
 
   const isReadOnly = appStatus !== 'draft' && appStatus !== 'submitted' && step !== 4;
+
+  const validateStep = (s: number) => {
+    const newErrors: Record<string, string> = {};
+    if (s === 1) {
+      if (!formData.fullName) newErrors.fullName = 'Nama lengkap wajib diisi';
+      if (!formData.birthPlace) newErrors.birthPlace = 'Tempat lahir wajib diisi';
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const steps = [
     { label: 'Identitas Diri', icon: <User size={20} /> },

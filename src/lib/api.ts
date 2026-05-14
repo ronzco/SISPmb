@@ -39,4 +39,5 @@ export const dataApi = {
   getLogs: () => api.get("/admin/logs"),
   getUserDocuments: (userId: string) => api.get(`/admin/documents/${userId}`),
   updateDocumentStatus: (docId: string, status: string) => api.patch(`/admin/documents/${docId}/status`, { status }),
+  updatePaymentStatus: (id: string, status: string) => api.patch(`/admin/payments/${id}/status`, { status }),
 };
