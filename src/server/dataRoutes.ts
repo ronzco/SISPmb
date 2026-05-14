@@ -30,8 +30,13 @@ router.get("/applications/my", authenticate, async (req: AuthRequest, res) => {
     const db = await getDb();
     const result = await db.select().from(applications).where(eq(applications.userId, req.user!.id));
     res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch applications" });
+  } catch (error: any) {
+    console.error("Fetch application TRACE:", error);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -100,9 +105,12 @@ router.get("/documents/my", authenticate, async (req: AuthRequest, res) => {
     const db = await getDb();
     const result = await db.select().from(documents).where(eq(documents.userId, req.user!.id));
     res.json(result);
-  } catch (error) {
-    console.error("Fetch documents error:", error);
-    res.status(500).json({ error: "Failed to fetch documents" });
+  } catch (error: any) {
+    console.error("Fetch documents TRACE:", error);
+    res.status(500).json({ 
+      error: "Internal Server Error",
+      message: error.message
+    });
   }
 });
 

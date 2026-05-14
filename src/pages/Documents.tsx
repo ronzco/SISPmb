@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { dataApi } from '../lib/api';
 import { RegistrationDocument } from '../types';
 import { motion } from 'motion/react';
@@ -16,42 +17,66 @@ export default function Documents() {
     { id: 'ktp', label: 'KTP / Kartu Pelajar', description: 'Sisi depan yang terbaca jelas' },
   ];
 
-  useEffect(() => {
-    const fetchDocs = async () => {
-      try {
-        const response = await dataApi.getMyDocuments();
-        console.log('Fetched documents:', response.data);
-        if (Array.isArray(response.data)) {
-          setDocs(response.data);
-        } else {
-          console.error('Documents response data is not an array:', response.data);
-          setDocs([]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch documents:', error);
-        setDocs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const [uploading, setUploading] = useState<string | null>(null);
 
+  const fetchDocs = async () => {
+    try {
+      const response = await dataApi.getMyDocuments();
+      if (Array.isArray(response.data)) {
+        setDocs(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch documents:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDocs();
   }, []);
 
-  const handleUpload = async (typeId: string) => {
-    // Simulating upload for this applet environment
-    const docData = {
-      type: typeId,
-      url: `https://picsum.photos/seed/${typeId}/800/600`, // Placeholder
-    };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, typeId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('File terlalu besar. Maksimal 2MB.');
+      return;
+    }
+
+    setUploading(typeId);
+    const formData = new FormData();
+    formData.append('file', file);
 
     try {
-      const response = await dataApi.uploadDocument(docData);
-      setDocs([...docs, { id: response.data.id, ...docData, status: 'pending', uploadedAt: Date.now(), userId: '' } as RegistrationDocument]);
+      // 1. Upload file to server
+      const uploadRes = await dataApi.uploadFile(formData);
+      
+      const fileUrl = uploadRes.data.url;
+
+      // 2. Save document metadata
+      await dataApi.uploadDocument({
+        type: typeId,
+        url: fileUrl,
+      });
+
+      await fetchDocs();
+      alert('Berkas berhasil diunggah.');
     } catch (error) {
       console.error('Upload failed:', error);
       alert('Gagal mengunggah berkas.');
+    } finally {
+      setUploading(null);
     }
+  };
+
+  const handleUploadClick = (typeId: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,application/pdf';
+    input.onchange = (e: any) => handleFileUpload(e, typeId);
+    input.click();
   };
 
   const handleDelete = async (docId: string) => {
@@ -147,13 +172,16 @@ export default function Documents() {
                   </div>
                 ) : (
                   <button 
-                    onClick={() => handleUpload(type.id)}
-                    className="w-full h-28 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-600 hover:text-blue-600 dark:hover:text-blue-400 transition-all rounded-2xl hover:bg-white dark:hover:bg-slate-800/50"
+                    onClick={() => handleUploadClick(type.id)}
+                    disabled={uploading === type.id}
+                    className="w-full h-28 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-600 hover:text-blue-600 dark:hover:text-blue-400 transition-all rounded-2xl hover:bg-white dark:hover:bg-slate-800/50 disabled:opacity-50"
                   >
                     <div className="p-3 bg-slate-100 dark:bg-slate-800/50 rounded-full group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
-                      <CloudUpload size={24} strokeWidth={2} />
+                      {uploading === type.id ? <Loader2 className="animate-spin" size={24} /> : <CloudUpload size={24} strokeWidth={2} />}
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.1em]">Upload Now</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.1em]">
+                      {uploading === type.id ? 'Uploading...' : 'Upload Now'}
+                    </span>
                   </button>
                 )}
               </div>

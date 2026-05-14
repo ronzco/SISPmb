@@ -32,6 +32,8 @@ export default function Registration() {
   const [docsLoading, setDocsLoading] = useState(true);
   const selectedFaculty = FACULTIES.find(f => f.id === formData.program);
 
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchExistingData = async () => {
       try {
@@ -41,6 +43,7 @@ export default function Registration() {
         ]);
         
         setDocs(docRes.data);
+        setFetchError(null);
         
         if (appRes.data.length > 0) {
           const app = appRes.data[0];
@@ -53,8 +56,9 @@ export default function Registration() {
             fullName: profile.fullName || '',
           }));
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Fetch application error:", error);
+        setFetchError("Gagal mengambil data dari server. Pastikan database MySQL XAMPP Anda aktif dan tabel sudah dibuat.");
       } finally {
         setLoading(false);
         setDocsLoading(false);
@@ -63,6 +67,17 @@ export default function Registration() {
 
     fetchExistingData();
   }, [profile]);
+
+  if (fetchError) return (
+    <div className="max-w-xl mx-auto mt-12 p-10 bg-white dark:bg-[#151921] rounded-[2.5rem] border border-red-200 dark:border-red-900/30 text-center">
+      <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <Send size={32} />
+      </div>
+      <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Connection Error</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6">{fetchError}</p>
+      <button onClick={() => window.location.reload()} className="px-8 py-3 bg-red-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest">Retry Connection</button>
+    </div>
+  );
 
   const handleSave = async (isSubmit = false) => {
     if (isSubmit && !validateStep(step)) return;

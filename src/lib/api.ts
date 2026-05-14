@@ -28,6 +28,9 @@ export const dataApi = {
   // Student Documents
   getMyDocuments: () => api.get("/documents/my"),
   uploadDocument: (data: any) => api.post("/documents", data),
+  uploadFile: (formData: FormData) => api.post("/upload", formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   deleteDocument: (id: string) => api.delete(`/documents/${id}`),
 
   // Student Payments

@@ -19,6 +19,8 @@ export default function Dashboard() {
   const [fees, setFees] = useState<FeeConfig[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [fetchError, setFetchError] = useState(false);
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -34,12 +36,14 @@ export default function Dashboard() {
         setFees(feeRes.data);
         setDocs(docRes.data);
         setPayment(payRes.data);
+        setFetchError(false);
         
         if (appRes.data.length > 0) {
           setApplication(appRes.data[0]);
         }
       } catch (error) {
         console.error("Dashboard fetch error:", error);
+        setFetchError(true);
       } finally {
         setLoading(false);
       }

@@ -2,16 +2,28 @@ import { Resend } from "resend";
 import axios from "axios";
 
 // Initialize Resend
-const resend = new Resend(process.env.EMAIL_API_KEY);
+let resendClient: Resend | null = null;
+
+const getResend = () => {
+  if (!resendClient) {
+    const apiKey = process.env.EMAIL_API_KEY;
+    if (!apiKey) {
+      throw new Error("EMAIL_API_KEY environment variable is required to send emails");
+    }
+    resendClient = new Resend(apiKey);
+  }
+  return resendClient;
+};
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
   if (!process.env.EMAIL_API_KEY) {
-    console.warn("EMAIL_API_KEY not set, skipping email");
+    console.warn("EMAIL_API_KEY not set, skipping email sending.");
     return;
   }
   try {
-    await resend.emails.send({
-      from: "PMB Uniku <noreply@pmb.uniku.ac.id>",
+    const client = getResend();
+    await client.emails.send({
+      from: "PMB Unutn <noreply@unutn.ac.id>",
       to: [to],
       subject,
       html,

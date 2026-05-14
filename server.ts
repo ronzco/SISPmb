@@ -9,6 +9,9 @@ import authRoutes from "./src/server/authRoutes.js";
 import dataRoutes from "./src/server/dataRoutes.js";
 import adminRoutes from "./src/server/adminRoutes.js";
 import { getDb } from "./src/db/db.js";
+import { authenticate } from "./src/server/middleware.js";
+import multer from "multer";
+import fs from "fs";
 
 // Handle ESM/CJS compatibility for paths
 const __filename = fileURLToPath(import.meta.url);
@@ -25,7 +28,42 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
-  // Initialize DB connection optionally on startup
+  // Ensure upload directory exists
+  const uploadPath = path.join(process.cwd(), "public", "uploads");
+  if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath, { recursive: true });
+  }
+
+  // Serve static files
+  app.use("/uploads", express.static(uploadPath));
+
+  // Multer storage
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadPath),
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  });
+
+  const upload = multer({ 
+    storage,
+    limits: { fileSize: 2 * 1024 * 1024 },
+  });
+
+  // Explicit Upload Route (Before mounting router)
+  app.post("/api/upload", authenticate, upload.single("file"), (req: any, res) => {
+    console.log(`[UPLOAD] Hit by user ${req.user?.id}`);
+    if (!req.file) {
+      console.warn("[UPLOAD] No file provided");
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const fileUrl = `/uploads/${req.file.filename}`;
+    console.log(`[UPLOAD] Success: ${fileUrl}`);
+    res.json({ url: fileUrl });
+  });
+
+  // Initialize DB connection
   getDb().catch(err => console.warn("Database not connected yet. Will retry on request."));
 
   const resend = process.env.EMAIL_API_KEY ? new Resend(process.env.EMAIL_API_KEY) : null;

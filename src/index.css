@@ -31,11 +31,11 @@
   }
 
   .dark {
-    --background: 224.3 25% 12%; 
+    --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 224.3 25% 15%;
+    --card: 222.2 84% 7%;
     --card-foreground: 210 40% 98%;
-    --popover: 224.3 25% 12%;
+    --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 47.4% 11.2%;
@@ -55,17 +55,10 @@
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
-    scrollbar-width: none;
-  }
-  *::-webkit-scrollbar {
-    display: none;
+    @apply border-slate-200 dark:border-slate-800;
   }
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-feature-settings: "rlig" 1, "calt" 1;
-    @apply transition-colors duration-300;
+    @apply bg-slate-50 dark:bg-[#0B0E14] text-slate-900 dark:text-slate-100 transition-colors duration-300 antialiased;
   }
 }
 
@@ -73,25 +66,10 @@
   @apply bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-2xl;
 }
 
-.ui-container {
-  @apply max-h-screen overflow-hidden flex flex-col;
-}
-
-.scrolling-content {
-  @apply flex-1 overflow-y-auto scroll-smooth;
+.scrollbar-hide {
+  -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
-.scrolling-content::-webkit-scrollbar {
+.scrollbar-hide::-webkit-scrollbar {
   display: none;
-}
-
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
-}
-
-.animate-float {
-  animation: float 6s ease-in-out infinite;
 }
