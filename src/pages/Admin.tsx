@@ -12,6 +12,7 @@ import {
 import { cn } from '../lib/utils';
 import { handleFirestoreError, OperationType } from '../lib/fireErrorHandler';
 import { Announcement, FeeConfig } from '../types';
+import { FACULTIES, getProgramById } from '../constants/programs';
 
 export default function AdminDashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -20,6 +21,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | 'all'>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending'>('all');
+  const [docsFilter, setDocsFilter] = useState<'all' | 'complete' | 'incomplete'>('all');
   const [majorFilter, setMajorFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -28,6 +31,10 @@ export default function AdminDashboard() {
   const [selectedApp, setSelectedApp] = useState<StudentApplication | null>(null);
   const [appDocs, setAppDocs] = useState<RegistrationDocument[]>([]);
   const [appPayment, setAppPayment] = useState<PaymentRecord | null>(null);
+  
+  // Bulk data for dashboard overview
+  const [allPayments, setAllPayments] = useState<PaymentRecord[]>([]);
+  const [allDocuments, setAllDocuments] = useState<RegistrationDocument[]>([]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'applicants' | 'logs' | 'announcements' | 'fees'>((searchParams.get('tab') as any) || 'applicants');
@@ -50,7 +57,7 @@ export default function AdminDashboard() {
 
   // Form states for new content
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', type: 'info' as any });
-  const [newFee, setNewFee] = useState({ description: '', amount: 0 });
+  const [newFee, setNewFee] = useState({ description: '', amount: 0, facultyId: '', programId: '' });
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -125,14 +132,31 @@ export default function AdminDashboard() {
   };
 
   const handleAddFee = async () => {
-    if (!newFee.description || !newFee.amount) return;
-    const id = `FEE-${Date.now()}`;
+    if (!newFee.amount) return;
+    
+    // Auto-generate description if not provided based on program/faculty
+    let description = newFee.description;
+    if (!description && newFee.programId) {
+      const prog = getProgramById(newFee.programId);
+      if (prog) description = `Biaya Pendidikan: ${prog.name}`;
+    } else if (!description && newFee.facultyId) {
+      const fac = FACULTIES.find(f => f.id === newFee.facultyId);
+      if (fac) description = `Biaya Pendidikan: ${fac.name}`;
+    }
+
+    if (!description) description = "Biaya Lainnya";
+
+    const id = newFee.programId || newFee.facultyId || `FEE-${Date.now()}`;
+    
     await setDoc(doc(db, 'fees_config', id), {
-      ...newFee,
+      description,
+      amount: newFee.amount,
+      facultyId: newFee.facultyId || null,
+      programId: newFee.programId || null,
       id,
       updatedAt: Date.now()
     });
-    setNewFee({ description: '', amount: 0 });
+    setNewFee({ description: '', amount: 0, facultyId: '', programId: '' });
     fetchFees();
   };
 
@@ -159,12 +183,27 @@ export default function AdminDashboard() {
   };
 
   const fetchApplications = async () => {
-    const q = query(collection(db, 'applications'), orderBy('updatedAt', 'desc'));
-    const snap = await getDocs(q).catch(e => handleFirestoreError(e, OperationType.LIST, 'applications'));
-    if (snap) {
-      setApplications(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentApplication)));
+    try {
+      setLoading(true);
+      const q = query(collection(db, 'applications'), orderBy('updatedAt', 'desc'));
+      const snap = await getDocs(q).catch(e => handleFirestoreError(e, OperationType.LIST, 'applications'));
+      
+      // Fetch all payments for summary
+      const paySnap = await getDocs(collection(db, 'payments'));
+      setAllPayments(paySnap.docs.map(d => ({ id: d.id, ...d.data() } as PaymentRecord)));
+
+      // Fetch all documents for summary
+      const docSnap = await getDocs(collection(db, 'documents'));
+      setAllDocuments(docSnap.docs.map(d => ({ id: d.id, ...d.data() } as RegistrationDocument)));
+
+      if (snap) {
+        setApplications(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentApplication)));
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchDetails = async (app: StudentApplication) => {
@@ -262,6 +301,18 @@ export default function AdminDashboard() {
     fetchApplications();
   };
 
+  const getPaymentStatus = (userId: string) => {
+    const payment = allPayments.find(p => p.userId === userId);
+    return payment?.status || 'pending';
+  };
+
+  const getDocsStatus = (userId: string) => {
+    const userDocs = allDocuments.filter(d => d.userId === userId);
+    if (userDocs.length === 0) return 'none';
+    const allVerified = userDocs.length >= 3 && userDocs.every(d => d.status === 'verified'); // Assuming 3 is complete
+    return allVerified ? 'complete' : 'incomplete';
+  };
+
   const filteredApps = applications
     .filter(app => {
       const matchesSearch = app.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -269,11 +320,17 @@ export default function AdminDashboard() {
       const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
       const matchesMajor = majorFilter === 'all' || app.major === majorFilter;
       
+      const payStatus = getPaymentStatus(app.userId);
+      const matchesPayment = paymentFilter === 'all' || (paymentFilter === 'paid' ? payStatus === 'success' : payStatus !== 'success');
+      
+      const docStatus = getDocsStatus(app.userId);
+      const matchesDocs = docsFilter === 'all' || (docsFilter === 'complete' ? docStatus === 'complete' : docStatus !== 'complete');
+
       const appDate = app.updatedAt;
       const matchesStartDate = !startDate || appDate >= new Date(startDate).getTime();
       const matchesEndDate = !endDate || appDate <= new Date(endDate).getTime() + 86400000; // Include full day
       
-      return matchesSearch && matchesStatus && matchesMajor && matchesStartDate && matchesEndDate;
+      return matchesSearch && matchesStatus && matchesMajor && matchesStartDate && matchesEndDate && matchesPayment && matchesDocs;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -293,7 +350,9 @@ export default function AdminDashboard() {
     total: applications.length,
     submitted: applications.filter(a => a.status === 'submitted' || a.status === 'verifying').length,
     accepted: applications.filter(a => a.status === 'accepted').length,
-    revenue: applications.length * 350000 // Simplified
+    pendingPayments: applications.filter(a => getPaymentStatus(a.userId) !== 'success').length,
+    pendingDocs: applications.filter(a => getDocsStatus(a.userId) !== 'complete').length,
+    revenue: allPayments.filter(p => p.status === 'success').reduce((sum, p) => sum + p.amount, 0)
   };
 
   if (loading) return <div className="p-12 text-center">Loading Admin...</div>;
@@ -301,12 +360,12 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto w-full px-4">
-      <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center">
+      <div className="flex flex-col sm:flex-row justify-between gap-6 items-start sm:items-center">
         <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tighter leading-none">Management Console</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter leading-none">Management Console</h2>
             <div className={cn(
-              "px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm",
+              "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shadow-sm",
               adminRole === 'superadmin' ? "bg-purple-50 text-purple-700 border-purple-100" :
               adminRole === 'committee_academic' ? "bg-blue-50 text-blue-700 border-blue-100" :
               "bg-amber-50 text-amber-700 border-amber-100"
@@ -344,14 +403,14 @@ export default function AdminDashboard() {
       {/* Modern Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Registered', sub: 'Total Applicants', value: stats.total, icon: <Users size={24} />, color: 'blue' },
-          { label: 'Pending', sub: 'Verification Needed', value: stats.submitted, icon: <Clock size={24} />, color: 'amber' },
-          { label: 'Verified', sub: 'Academic Approved', value: stats.accepted, icon: <CheckCircle size={24} />, color: 'emerald' },
-          { label: 'Revenue', sub: 'Estimated Gross', value: `Rp ${(stats.revenue/1000000).toFixed(1)}M`, icon: <TrendingUp size={24} />, color: 'indigo' },
+          { label: 'Total Enrolled', sub: 'Gross Applicants', value: stats.total, icon: <Users size={24} />, color: 'blue' },
+          { label: 'Billing Gap', sub: 'Pending Payments', value: stats.pendingPayments, icon: <DollarSign size={24} />, color: 'amber' },
+          { label: 'Incomplete', sub: 'Pending Verification', value: stats.pendingDocs, icon: <AlertCircle size={24} />, color: 'rose' },
+          { label: 'Settlement', sub: 'Verified Revenue', value: `Rp ${(stats.revenue/1000000).toFixed(1)}M`, icon: <TrendingUp size={24} />, color: 'indigo' },
         ].map((s, i) => (
-          <div key={i} className="group bg-white p-8 rounded-3xl border border-slate-200 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+          <div key={i} className="group bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110",
+              "w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center mb-4 md:mb-6 transition-transform group-hover:scale-110",
               s.color === 'blue' ? "bg-blue-50 text-blue-600" :
               s.color === 'amber' ? "bg-amber-50 text-amber-600" :
               s.color === 'emerald' ? "bg-emerald-50 text-emerald-600" :
@@ -369,19 +428,19 @@ export default function AdminDashboard() {
       </div>
 
       {/* Tabs Layout */}
-      <div className="relative mb-8">
-        <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit border border-slate-200/50">
+      <div className="relative mb-8 -mx-4 px-4 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-max border border-slate-200/50">
           {[
-            { id: 'applicants', label: 'Applicants', icon: <Users size={16} /> },
-            { id: 'logs', label: 'Audit Logs', icon: <ShieldCheck size={16} />, hidden: !hasPermission('view_logs') },
-            { id: 'announcements', label: 'Newsroom', icon: <Megaphone size={16} /> },
-            { id: 'fees', label: 'Price List', icon: <CreditCard size={16} /> },
+            { id: 'applicants', label: 'Applicants', icon: <Users size={14} /> },
+            { id: 'logs', label: 'Logs', icon: <ShieldCheck size={14} />, hidden: !hasPermission('view_logs') },
+            { id: 'announcements', label: 'News', icon: <Megaphone size={14} /> },
+            { id: 'fees', label: 'Fees', icon: <CreditCard size={14} /> },
           ].map((tab) => !tab.hidden && (
             <button 
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
               className={cn(
-                "px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all relative z-10",
+                "px-4 md:px-6 py-2 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all relative z-10 whitespace-nowrap",
                 activeTab === tab.id 
                   ? "text-blue-600" 
                   : "text-slate-500 hover:text-slate-700"
@@ -409,44 +468,64 @@ export default function AdminDashboard() {
           exit={{ opacity: 0, y: -10 }}
           className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
         >
-        <div className="p-8 border-b border-slate-200 bg-slate-50/50 flex flex-col gap-6">
-          <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center">
-            <div className="relative flex-1 group w-full">
+        <div className="p-4 md:p-8 border-b border-slate-200 bg-slate-50/50 flex flex-col gap-4 md:gap-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
+            <div className="relative flex-1 group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={18} />
               <input 
                 type="text" 
-                placeholder="Search by name, ID, or participant number..."
+                placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-100 outline-none text-sm font-medium transition-all"
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-100 outline-none text-sm font-medium transition-all"
               />
             </div>
-            <div className="flex flex-wrap gap-2 w-full xl:w-auto">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap gap-2">
               <select 
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="flex-1 xl:flex-none px-5 py-3.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
+                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
               >
-                <option value="all">Status: ALL</option>
+                <option value="all">Stage: ALL</option>
                 <option value="submitted">SUBMITTED</option>
                 <option value="verifying">VERIFYING</option>
                 <option value="test_ready">TEST READY</option>
                 <option value="accepted">ACCEPTED</option>
                 <option value="rejected">REJECTED</option>
               </select>
-
+ 
+              <select 
+                value={paymentFilter}
+                onChange={(e) => setPaymentFilter(e.target.value as any)}
+                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
+              >
+                <option value="all">Billing: ALL</option>
+                <option value="paid">PAID</option>
+                <option value="pending">UNPAID</option>
+              </select>
+ 
+              <select 
+                value={docsFilter}
+                onChange={(e) => setDocsFilter(e.target.value as any)}
+                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
+              >
+                <option value="all">Docs: ALL</option>
+                <option value="complete">COMPLETE</option>
+                <option value="incomplete">INCOMPL</option>
+              </select>
+ 
               <select 
                 value={majorFilter}
                 onChange={(e) => setMajorFilter(e.target.value)}
-                className="flex-1 xl:flex-none px-5 py-3.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
+                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer col-span-2 md:col-span-1"
               >
                 <option value="all">Major: ALL</option>
                 {majors.map(m => (
                   <option key={m as string} value={m as string}>{(m as string)?.toUpperCase()}</option>
                 ))}
               </select>
-
-              <div className="flex items-center bg-white border border-slate-200 rounded-2xl px-3 gap-2">
+ 
+              <div className="flex items-center bg-white border border-slate-200 rounded-2xl px-3 gap-2 col-span-2 md:col-span-2 lg:col-span-1">
                 <Filter size={14} className="text-slate-400" />
                 <select 
                   value={`${sortBy}-${sortOrder}`}
@@ -455,55 +534,55 @@ export default function AdminDashboard() {
                     setSortBy(field as any);
                     setSortOrder(order as any);
                   }}
-                  className="py-3.5 bg-transparent text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none cursor-pointer"
+                  className="w-full py-3 bg-transparent text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none cursor-pointer"
                 >
-                  <option value="date-desc">Newest First</option>
-                  <option value="date-asc">Oldest First</option>
-                  <option value="name-asc">Name A-Z</option>
-                  <option value="name-desc">Name Z-A</option>
+                  <option value="date-desc">Newest</option>
+                  <option value="date-asc">Oldest</option>
+                  <option value="name-asc">A-Z</option>
+                  <option value="name-desc">Z-A</option>
                 </select>
               </div>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-6 pt-6 border-t border-slate-200/50">
-            <div className="flex items-center gap-4">
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date Range:</span>
-               <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-100">
+ 
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 pt-4 md:pt-6 border-t border-slate-200/50">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+               <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">Date Range:</span>
+               <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-100 w-full sm:w-auto">
                 <input 
                   type="date" 
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg text-[10px] font-black text-slate-600 outline-none focus:bg-slate-50 uppercase"
+                  className="flex-1 sm:flex-none px-2 py-1.5 rounded-lg text-[9px] font-black text-slate-600 outline-none focus:bg-slate-50 uppercase min-w-[110px]"
                 />
                 <span className="text-slate-300">—</span>
                 <input 
                   type="date" 
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg text-[10px] font-black text-slate-600 outline-none focus:bg-slate-50 uppercase"
+                  className="flex-1 sm:flex-none px-2 py-1.5 rounded-lg text-[9px] font-black text-slate-600 outline-none focus:bg-slate-50 uppercase min-w-[110px]"
                 />
                </div>
                {(startDate || endDate) && (
                  <button 
                    onClick={() => { setStartDate(''); setEndDate(''); }}
-                   className="text-[10px] text-red-500 font-black hover:underline uppercase tracking-widest"
+                   className="text-[9px] text-red-500 font-black hover:underline uppercase tracking-widest px-2"
                  >
-                   Clear filters
+                   Clear
                  </button>
                )}
             </div>
             
-            <div className="ml-auto flex items-center gap-3">
+            <div className="lg:ml-auto flex items-center justify-between lg:justify-end gap-3">
                <div className="flex -space-x-2">
                  {filteredApps.slice(0, 4).map((a, i) => (
-                   <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[10px] font-black text-slate-600 overflow-hidden shadow-sm">
+                   <div key={i} className="w-7 h-7 md:w-8 md:h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[9px] md:text-[10px] font-black text-slate-600 overflow-hidden shadow-sm">
                       {a.fullName.charAt(0)}
                    </div>
                  ))}
                </div>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
-                Found <span className="text-blue-600">{filteredApps.length}</span> results
+               <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
+                <span className="text-blue-600">{filteredApps.length}</span> results found
                </p>
             </div>
           </div>
@@ -515,8 +594,9 @@ export default function AdminDashboard() {
               <tr className="bg-slate-50/50 text-[10px] uppercase font-black text-slate-400 tracking-[0.15em] border-b border-slate-100">
                 <th className="px-8 py-5">Participant ID</th>
                 <th className="px-8 py-5">Full Name</th>
-                <th className="px-8 py-5">Program Study</th>
-                <th className="px-8 py-5">Stage</th>
+                <th className="px-8 py-5">Program</th>
+                <th className="px-8 py-5">Verification Status</th>
+                <th className="px-8 py-5">Process Stage</th>
                 <th className="px-8 py-5 text-right">Actions</th>
               </tr>
             </thead>
@@ -543,6 +623,26 @@ export default function AdminDashboard() {
                      <span className="text-xs font-bold text-slate-600">
                         {app.major}
                      </span>
+                  </td>
+                  <td className="px-4 md:px-8 py-5">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4">
+                       <div className="flex flex-col gap-1">
+                          <div className={cn(
+                            "flex items-center gap-1.5 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
+                            getPaymentStatus(app.userId) === 'success' ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-50"
+                          )}>
+                             <CreditCard size={10} />
+                             {getPaymentStatus(app.userId)}
+                          </div>
+                          <div className={cn(
+                            "flex items-center gap-1.5 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
+                            getDocsStatus(app.userId) === 'complete' ? "text-blue-600 bg-blue-50" : "text-slate-400 bg-slate-50"
+                          )}>
+                             <FileText size={10} />
+                             {getDocsStatus(app.userId)}
+                          </div>
+                       </div>
+                    </div>
                   </td>
                   <td className="px-8 py-5">
                     <div className={cn(
@@ -760,27 +860,56 @@ export default function AdminDashboard() {
               <div className="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
                 <DollarSign size={20} />
               </div>
-              FINANCIAL CONFIGURATION
+              FINANCIAL CONFIGURATION & PROGRAM PRICING
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10">
-               <div className="md:col-span-7">
+               <div className="md:col-span-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Faculty</label>
+                  <select 
+                    value={newFee.facultyId}
+                    onChange={e => setNewFee({...newFee, facultyId: e.target.value, programId: '', description: ''})}
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-bold text-sm tracking-tight"
+                  >
+                    <option value="">-- PILIH FAKULTAS --</option>
+                    {FACULTIES.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+               </div>
+               <div className="md:col-span-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Program Study</label>
+                  <select 
+                    value={newFee.programId}
+                    onChange={e => setNewFee({...newFee, programId: e.target.value, description: ''})}
+                    disabled={!newFee.facultyId}
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-bold text-sm tracking-tight disabled:opacity-50"
+                  >
+                    <option value="">-- SEMUA PRODI / PILIH PRODI --</option>
+                    {FACULTIES.find(f => f.id === newFee.facultyId)?.programs.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+               </div>
+               <div className="md:col-span-4 relative">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Fee Amount</label>
+                  <div className="relative">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</div>
+                    <input 
+                      type="number" 
+                      placeholder="Pricing..."
+                      value={newFee.amount || ''}
+                      onChange={e => setNewFee({...newFee, amount: Number(e.target.value)})}
+                      className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-mono font-bold text-sm"
+                    />
+                  </div>
+               </div>
+               <div className="md:col-span-12">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Custom Label (Optional)</label>
                   <input 
                     type="text" 
-                    placeholder="Fee Descriptor (e.g., Admission Fee Cycle II)"
+                    placeholder="Auto-generated if empty (e.g., Biaya Pendidikan: Program Studi Akuntansi)"
                     value={newFee.description}
                     onChange={e => setNewFee({...newFee, description: e.target.value})}
                     className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-bold text-sm tracking-tight"
-                  />
-               </div>
-               <div className="md:col-span-5 relative">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</div>
-                  <input 
-                    type="number" 
-                    placeholder="Unit Price"
-                    value={newFee.amount || ''}
-                    onChange={e => setNewFee({...newFee, amount: Number(e.target.value)})}
-                    className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-mono font-bold text-sm"
                   />
                </div>
                <div className="md:col-span-12">
@@ -788,7 +917,7 @@ export default function AdminDashboard() {
                     onClick={handleAddFee}
                     className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 uppercase"
                   >
-                    REGISTER FEE STRUCTURE
+                    SET PRICE / UPDATE STRUCTURE
                   </button>
                </div>
             </div>
@@ -809,7 +938,7 @@ export default function AdminDashboard() {
                    </button>
                 </div>
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue Item</p>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fee.programId ? 'Major Pricing' : 'Global/Faculty Fee'}</p>
                    <h4 className="text-lg font-black text-slate-800 mt-1 tracking-tight leading-tight">{fee.description}</h4>
                    <div className="mt-6 flex items-baseline gap-1">
                       <span className="text-sm font-bold text-slate-400">Rp</span>
@@ -817,6 +946,7 @@ export default function AdminDashboard() {
                          {fee.amount.toLocaleString('id-ID')}
                       </span>
                    </div>
+                   <p className="text-[9px] font-bold text-slate-400 mt-4 uppercase">Last updated: {new Date(fee.updatedAt).toLocaleDateString()}</p>
                 </div>
               </div>
             ))}
@@ -837,19 +967,19 @@ export default function AdminDashboard() {
           <motion.div 
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="bg-white rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border border-white/20"
+            className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col border border-white/20"
           >
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white shrink-0">
-               <div className="flex items-center gap-6">
-                  <div className="w-16 h-16 rounded-[1.25rem] bg-blue-600 flex items-center justify-center text-2xl font-black shadow-lg shadow-blue-500/20">
+            <div className="p-5 md:p-8 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white shrink-0">
+               <div className="flex items-center gap-4 md:gap-6">
+                  <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[1.25rem] bg-blue-600 flex items-center justify-center text-xl md:text-2xl font-black shadow-lg shadow-blue-500/20">
                      {selectedApp.fullName.charAt(0)}
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black tracking-tight leading-none uppercase">{selectedApp.fullName}</h3>
-                    <div className="flex items-center gap-3 mt-2">
-                       <span className="font-mono text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">ID: {selectedApp.id}</span>
+                    <h3 className="text-lg md:text-2xl font-black tracking-tight leading-none uppercase">{selectedApp.fullName}</h3>
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-1 md:mt-2">
+                       <span className="font-mono text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">ID: {selectedApp.id}</span>
                        <span className={cn(
-                         "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-[0.2em] border",
+                         "px-2 py-0.5 rounded text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] border",
                          selectedApp.status === 'accepted' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
                          selectedApp.status === 'rejected' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
                          "bg-blue-500/10 text-blue-400 border-blue-500/20"
@@ -865,70 +995,68 @@ export default function AdminDashboard() {
                >
                   <X size={24} />
                </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-10 bg-[#FBFCFD] custom-scrollbar">
-               <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            </div>            <div className="flex-1 overflow-y-auto p-5 md:p-10 bg-[#FBFCFD] custom-scrollbar">
+               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
                   {/* Left Column: Bento Grid for Info */}
-                  <div className="lg:col-span-4 space-y-8">
-                     <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
+                  <div className="lg:col-span-4 space-y-6 md:space-y-8">
+                     <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-125 transition-transform"></div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 relative z-10">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 md:mb-6 flex items-center gap-2 relative z-10">
                            <Users size={14} className="text-blue-600" /> Personal Identity
                         </h4>
-                        <div className="space-y-6 relative z-10">
+                        <div className="space-y-4 md:space-y-6 relative z-10">
                            <div>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Academic Background</p>
-                              <p className="font-black text-slate-800 text-base leading-tight mt-1">{selectedApp.previousSchool}</p>
+                              <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-tight">Academic Background</p>
+                              <p className="font-black text-slate-800 text-sm md:text-base leading-tight mt-1">{selectedApp.previousSchool}</p>
                            </div>
                            <div>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Target Program</p>
-                              <p className="font-black text-blue-700 text-lg leading-tight mt-1">{selectedApp.major}</p>
+                              <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-tight">Target Program</p>
+                              <p className="font-black text-blue-700 text-base md:text-lg leading-tight mt-1">{selectedApp.major}</p>
                            </div>
-                           <div className="pt-6 border-t border-slate-50">
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Payment Fulfillment</p>
+                           <div className="pt-4 md:pt-6 border-t border-slate-50">
+                              <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-tight">Payment Fulfillment</p>
                               <div className="flex items-center gap-2 mt-2">
                                  <div className={cn("w-2 h-2 rounded-full", appPayment?.status === 'success' ? "bg-emerald-500" : "bg-rose-500")}></div>
-                                 <p className={cn("font-black text-xs uppercase tracking-widest", appPayment?.status === 'success' ? "text-emerald-700" : "text-rose-700")}>
+                                 <p className={cn("font-black text-[10px] md:text-xs uppercase tracking-widest", appPayment?.status === 'success' ? "text-emerald-700" : "text-rose-700")}>
                                    {appPayment?.status === 'success' ? `VERIFIED VIA ${appPayment.method}` : 'AWAITING PAYMENT'}
                                  </p>
                               </div>
                            </div>
                         </div>
                      </div>
-
+ 
                      {/* Stats for Applicant Performance */}
-                     <div className="bg-slate-900 p-8 rounded-[2rem] text-white overflow-hidden relative">
+                     <div className="bg-slate-900 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] text-white overflow-hidden relative">
                         <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Selection Metrics</h4>
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 md:mb-6">Selection Metrics</h4>
                         <div className="flex items-end justify-between">
                            <div>
-                              <p className="text-[10px] font-medium text-slate-400 uppercase leading-none">Admission Score</p>
-                              <p className="text-5xl font-black mt-2 tracking-tighter">{selectedApp.score || '--'}</p>
+                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 uppercase leading-none">Admission Score</p>
+                              <p className="text-4xl md:text-5xl font-black mt-2 tracking-tighter">{selectedApp.score || '--'}</p>
                            </div>
                            <div className="text-right">
-                              <p className="text-[10px] font-medium text-slate-400 uppercase leading-none">Percentile</p>
-                              <p className="text-lg font-black mt-1 text-blue-400">Top 12%</p>
+                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 uppercase leading-none">Percentile</p>
+                              <p className="text-base md:text-lg font-black mt-1 text-blue-400">Top 12%</p>
                            </div>
                         </div>
                      </div>
                   </div>
-
+ 
                   {/* Right Column: Files & Actions */}
-                  <div className="lg:col-span-8 space-y-10">
-                     <div className="bg-white p-10 rounded-[2rem] border border-slate-200 shadow-sm">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+                  <div className="lg:col-span-8 space-y-6 md:space-y-10">
+                     <div className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 md:mb-8 flex items-center gap-2">
                            <FileText size={14} className="text-blue-600" /> Required Documentation
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                            {appDocs.map(docItem => (
-                              <div key={docItem.id} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all group">
+                              <div key={docItem.id} className="p-4 md:p-5 rounded-xl md:rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all group">
                                  <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                        <div className="w-8 h-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:border-blue-100 transition-all">
                                           <FileText size={16} />
                                        </div>
-                                       <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{docItem.type}</span>
+                                       <span className="text-[10px] md:text-[11px] font-black text-slate-700 uppercase tracking-tight">{docItem.type}</span>
                                     </div>
                                     <span className={cn(
                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
@@ -947,15 +1075,15 @@ export default function AdminDashboard() {
                                        <div className="flex gap-2">
                                           <button 
                                              onClick={() => updateDocStatus(docItem.id, 'verified')}
-                                             className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                             className="p-1.5 md:p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
                                           >
-                                             <Check size={14} />
+                                             <Check size={12} className="md:w-[14px] md:h-[14px]" />
                                           </button>
                                           <button 
                                              onClick={() => updateDocStatus(docItem.id, 'rejected')}
-                                             className="p-2 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white transition-all shadow-sm"
+                                             className="p-1.5 md:p-2 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white transition-all shadow-sm"
                                           >
-                                             <X size={14} />
+                                             <X size={12} className="md:w-[14px] md:h-[14px]" />
                                           </button>
                                        </div>
                                     )}
@@ -963,16 +1091,16 @@ export default function AdminDashboard() {
                               </div>
                            ))}
                            {appDocs.length === 0 && (
-                              <div className="sm:col-span-2 py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                              <div className="sm:col-span-2 py-8 md:py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No documentation uploaded yet</p>
                               </div>
                            )}
                         </div>
                      </div>
-
+ 
                      {/* Decision Panel */}
-                     <div className="bg-white p-10 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8">Admin Decision Workspace</h4>
+                     <div className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 md:mb-8">Admin Decision Workspace</h4>
                         
                         <div className="space-y-6">
                            {hasPermission('manage_academic') && (
@@ -980,60 +1108,62 @@ export default function AdminDashboard() {
                                  {(selectedApp.status === 'verifying' || selectedApp.status === 'submitted') && (
                                     <button 
                                        onClick={() => updateStatus('test_ready')} 
-                                       className="group w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xs tracking-[0.2em] flex items-center justify-center gap-4 hover:bg-blue-700 hover:shadow-2xl hover:shadow-blue-200 transition-all active:scale-[0.98]"
+                                       className="group w-full py-4 md:py-5 bg-blue-600 text-white rounded-xl md:rounded-2xl font-black text-xs tracking-[0.2em] flex items-center justify-center gap-3 md:gap-4 hover:bg-blue-700 hover:shadow-2xl hover:shadow-blue-200 transition-all active:scale-[0.98]"
                                     >
                                        <ShieldCheck size={20} className="group-hover:scale-110 transition-transform" /> VALIDATE & ISSUE TRACKING NO.
                                     </button>
                                  )}
-
+ 
                                  {selectedApp.status === 'test_ready' && (
-                                    <div className="p-8 bg-blue-50/50 rounded-3xl border border-blue-100 space-y-6 border-dashed">
-                                       <div className="flex items-center justify-between">
+                                    <div className="p-6 md:p-8 bg-blue-50/50 rounded-2xl md:rounded-3xl border border-blue-100 space-y-4 md:space-y-6 border-dashed">
+                                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                           <div>
                                              <h5 className="text-[11px] font-black text-blue-900 uppercase tracking-widest">Final Examination Results</h5>
                                              <p className="text-[10px] text-blue-500 font-medium tracking-tight">Input official SKD score to determine eligibility.</p>
                                           </div>
-                                          <div className="px-3 py-1 bg-white rounded-xl border border-blue-200 shadow-sm">
+                                          <div className="px-3 py-1 bg-white rounded-xl border border-blue-200 shadow-sm w-fit">
                                              <span className="text-[9px] font-black text-blue-600 uppercase">Stage: FINAL TEST</span>
                                           </div>
                                        </div>
                                        
-                                       <div className="flex gap-4">
+                                       <div className="flex flex-col sm:flex-row gap-4">
                                           <div className="relative flex-1">
                                              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300" size={16} />
                                              <input 
                                                type="number" 
                                                placeholder="Final Score (0-100)"
-                                               className="w-full pl-12 pr-4 py-4 bg-white border border-blue-200 rounded-2xl font-black text-sm tracking-tight outline-none focus:ring-4 focus:ring-blue-100/50"
+                                               className="w-full pl-12 pr-4 py-3.5 md:py-4 bg-white border border-blue-200 rounded-2xl font-black text-sm tracking-tight outline-none focus:ring-4 focus:ring-blue-100/50"
                                                onChange={(e) => {
                                                  const score = parseInt(e.target.value);
                                                  (window as any)._tempScore = score;
                                                }}
                                              />
                                           </div>
-                                          <button 
-                                             onClick={() => updateStatus('accepted', (window as any)._tempScore)}
-                                             className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-emerald-700 shadow-lg shadow-emerald-100 uppercase transition-all"
-                                          >
-                                             Approve
-                                          </button>
-                                          <button 
-                                             onClick={() => updateStatus('rejected')}
-                                             className="px-8 py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-rose-700 shadow-lg shadow-rose-100 uppercase transition-all"
-                                          >
-                                             Reject
-                                          </button>
+                                          <div className="flex gap-2">
+                                             <button 
+                                                onClick={() => updateStatus('accepted', (window as any)._tempScore)}
+                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-emerald-700 shadow-lg shadow-emerald-100 uppercase transition-all"
+                                             >
+                                                Approve
+                                             </button>
+                                             <button 
+                                                onClick={() => updateStatus('rejected')}
+                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-rose-700 shadow-lg shadow-rose-100 uppercase transition-all"
+                                             >
+                                                Reject
+                                             </button>
+                                          </div>
                                        </div>
                                     </div>
                                  )}
-
+ 
                                  {(selectedApp.status === 'accepted' || selectedApp.status === 'rejected') && (
-                                    <div className="text-center py-10 bg-slate-50 rounded-3xl border border-slate-100">
+                                    <div className="text-center py-6 md:py-10 bg-slate-50 rounded-2xl md:rounded-3xl border border-slate-100">
                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Current Decision Finalized</p>
-                                       <p className="text-3xl font-black text-slate-800 mt-2 uppercase tracking-tighter">{selectedApp.status}</p>
+                                       <p className="text-2xl md:text-3xl font-black text-slate-800 mt-2 uppercase tracking-tighter">{selectedApp.status}</p>
                                        <button 
                                           onClick={() => updateStatus('test_ready')}
-                                          className="mt-6 text-[10px] font-black text-blue-600 hover:bg-blue-50 px-6 py-2 rounded-xl transition-all uppercase tracking-widest border border-blue-100 shadow-sm"
+                                          className="mt-4 md:mt-6 text-[9px] md:text-[10px] font-black text-blue-600 hover:bg-blue-50 px-6 py-2 rounded-xl transition-all uppercase tracking-widest border border-blue-100 shadow-sm"
                                        >
                                           Rollback to Test Stage
                                        </button>
@@ -1052,7 +1182,7 @@ export default function AdminDashboard() {
                                       fetchDetails(selectedApp);
                                     }
                                  }}
-                                 className="w-full py-5 bg-indigo-900 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-950 transition-all active:scale-95 disabled:opacity-30 uppercase"
+                                 className="w-full py-4 md:py-5 bg-indigo-900 text-white rounded-xl md:rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-950 transition-all active:scale-95 disabled:opacity-30 uppercase"
                                  disabled={!appPayment || appPayment.status === 'success'}
                               >
                                  <CreditCard size={18} /> Approve Billing Receipt

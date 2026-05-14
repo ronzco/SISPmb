@@ -1,36 +1,73 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { PaymentRecord } from '../types';
+import { PaymentRecord, StudentApplication, FeeConfig } from '../types';
 import { motion } from 'motion/react';
-import { CreditCard, CheckCircle2, Clock, AlertCircle, RefreshCw, Copy, ExternalLink, Download } from 'lucide-react';
+import { CreditCard, CheckCircle2, Clock, AlertCircle, RefreshCw, Copy, ExternalLink, Download, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Payment() {
   const [payment, setPayment] = useState<PaymentRecord | null>(null);
+  const [application, setApplication] = useState<StudentApplication | null>(null);
+  const [fee, setFee] = useState<FeeConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedMethod, setSelectedMethod] = useState<'VA' | 'QRIS' | 'EWALLET'>('VA');
 
   const vaNumber = `8812000${auth.currentUser?.uid.substring(0, 5)}`;
-  const amount = 350192;
+  const defaultAmount = 350000;
+  const uniqueCode = 192; // Simulated unique code for identification
+  const amount = (fee?.amount || defaultAmount) + uniqueCode;
 
   useEffect(() => {
-    const fetchPayment = async () => {
+    const fetchData = async () => {
       if (!auth.currentUser) return;
-      const q = query(
-        collection(db, 'payments'),
-        where('userId', '==', auth.currentUser.uid)
-      );
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        setPayment({ id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as PaymentRecord);
+      
+      try {
+        // Fetch current application to get major
+        const appSnap = await getDocs(query(collection(db, 'applications'), where('userId', '==', auth.currentUser.uid)));
+        let userMajor = '';
+        if (!appSnap.empty) {
+          const app = { id: appSnap.docs[0].id, ...appSnap.docs[0].data() } as StudentApplication;
+          setApplication(app);
+          userMajor = app.major || '';
+        }
+
+        // Fetch payment
+        const paySnap = await getDocs(query(collection(db, 'payments'), where('userId', '==', auth.currentUser.uid)));
+        if (!paySnap.empty) {
+          setPayment({ id: paySnap.docs[0].id, ...paySnap.docs[0].data() } as PaymentRecord);
+        }
+
+        // Fetch Fee Config
+        // First try to match by exact major name in description (since we stored name in major field)
+        const feesSnap = await getDocs(collection(db, 'fees_config'));
+        const allFees = feesSnap.docs.map(d => d.data() as FeeConfig);
+        
+        // Find fee that matches the major
+        const matchedFee = allFees.find(f => 
+          f.description.includes(userMajor) || 
+          (userMajor && f.id.includes(userMajor))
+        );
+        
+        if (matchedFee) {
+          setFee(matchedFee);
+        }
+      } catch (error) {
+        console.error("Error fetching payment data:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    fetchPayment();
+    fetchData();
   }, []);
 
-  const [selectedMethod, setSelectedMethod] = useState<'VA' | 'QRIS' | 'EWALLET'>('VA');
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center p-20 gap-4">
+      <Loader2 className="animate-spin text-blue-600" size={48} />
+      <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">Synchronizing Financial Data...</p>
+    </div>
+  );
 
   const methods = [
     { id: 'VA', name: 'Virtual Account', icon: <CreditCard size={18} />, color: 'blue' },

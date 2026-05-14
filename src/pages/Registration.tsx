@@ -7,70 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { User, GraduationCap, MapPin, CheckCircle2, Save, Send } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-const FACULTY_DATA: Record<string, { name: string, programs: { id: string, name: string }[] }> = {
-  'FEB': {
-    name: 'Fakultas Ekonomi dan Bisnis',
-    programs: [
-      { id: 'AKT', name: 'Program Studi Akuntansi' },
-      { id: 'IE', name: 'Program Studi Ilmu Ekonomi' },
-      { id: 'MNJ', name: 'Program Studi Manajemen' },
-    ]
-  },
-  'FH': {
-    name: 'Fakultas Hukum',
-    programs: [
-      { id: 'HK', name: 'Program Studi Ilmu Hukum' },
-    ]
-  },
-  'FISIP': {
-    name: 'Fakultas Ilmu Sosial dan Ilmu Politik',
-    programs: [
-      { id: 'HI', name: 'Program Studi Ilmu Hubungan Internasional' },
-      { id: 'IK', name: 'Program Studi Ilmu Komunikasi' },
-      { id: 'PP', name: 'Program Studi Politik dan Pemerintahan' },
-      { id: 'SOS', name: 'Program Studi Sosiologi' },
-    ]
-  },
-  'FK': {
-    name: 'Fakultas Kedokteran',
-    programs: [
-      { id: 'PD', name: 'Program Studi Pendidikan Dokter' },
-      { id: 'KEP', name: 'Program Studi Ilmu Keperawatan' },
-      { id: 'GZ', name: 'Program Studi Gizi Kesehatan' },
-    ]
-  },
-  'FKH': {
-    name: 'Fakultas Kehutanan',
-    programs: [
-      { id: 'KH', name: 'Program Studi Kehutanan' },
-    ]
-  },
-  'FMIPA': {
-    name: 'Fakultas MIPA',
-    programs: [
-      { id: 'ELINS', name: 'Program Studi Elektronika dan Instrumentasi' },
-      { id: 'IKOMP', name: 'Program Studi Ilmu Komputer' },
-      { id: 'MTK', name: 'Program Studi Matematika' },
-      { id: 'KIM', name: 'Program Studi Kimia' },
-    ]
-  },
-  'FT': {
-    name: 'Fakultas Teknik',
-    programs: [
-      { id: 'ARS', name: 'Program Studi Arsitektur' },
-      { id: 'TI', name: 'Program Studi Teknik Industri' },
-      { id: 'TE', name: 'Program Studi Teknik Elektro' },
-      { id: 'TS', name: 'Program Studi Teknik Sipil' },
-      { id: 'TINFO', name: 'Program Studi Teknologi Informasi' },
-    ]
-  },
-  'FPSI': {
-    name: 'Fakultas Psikologi',
-    programs: [
-      { id: 'PSI', name: 'Program Studi Psikologi' },
-    ]
-  }
-};
+import { FACULTIES } from '../constants/programs';
 
 export default function Registration() {
   const [step, setStep] = useState(1);
@@ -89,7 +26,7 @@ export default function Registration() {
     major: '',
   });
 
-  const selectedFaculty = FACULTY_DATA[formData.program];
+  const selectedFaculty = FACULTIES.find(f => f.id === formData.program);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [appStatus, setAppStatus] = useState<ApplicationStatus>('draft');
@@ -227,25 +164,27 @@ export default function Registration() {
   return (
     <div className="max-w-4xl mx-auto w-full">
       {/* Stepper */}
-      <div className="flex justify-between items-center mb-8 px-4">
+      <div className="flex justify-between items-center mb-8 px-2 md:px-4">
         {steps.map((s, i) => (
           <div key={i} className="flex-1 flex flex-col items-center relative">
             {i !== 0 && (
               <div className={cn(
-                "absolute top-5 -left-1/2 right-1/2 h-[2px] transition-colors duration-500",
+                "absolute top-4 md:top-5 -left-1/2 right-1/2 h-[2px] transition-colors duration-500",
                 step > i ? "bg-blue-600" : "bg-slate-200"
               )}></div>
             )}
             <div className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center z-10 transition-all duration-300",
+              "w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center z-10 transition-all duration-300",
               step > i ? "bg-blue-600 text-white" : 
               step === i + 1 ? "bg-white border-2 border-blue-600 text-blue-600 shadow-lg shadow-blue-50" : 
               "bg-slate-100 text-slate-400"
             )}>
-              {s.icon}
+              <div className="scale-75 md:scale-100">
+                {s.icon}
+              </div>
             </div>
             <span className={cn(
-              "text-[10px] uppercase font-bold mt-2 tracking-wider",
+              "text-[8px] md:text-[10px] uppercase font-bold mt-2 tracking-wider text-center px-1",
               step === i + 1 ? "text-blue-600" : "text-slate-400"
             )}>
               {s.label}
@@ -262,15 +201,15 @@ export default function Registration() {
           exit={{ opacity: 0, x: -20 }}
           className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden"
         >
-          <div className="p-8">
+          <div className="p-6 md:p-8">
             {step === 1 && (
               <div className="space-y-6">
                 {isReadOnly && (
-                  <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center gap-3 text-yellow-800 text-xs font-medium">
+                  <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center gap-3 text-yellow-800 text-[10px] md:text-xs font-medium">
                     <Save size={16} /> Data terkunci karena sedang dalam proses verifikasi.
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nama Lengkap sesuai Ijazah</label>
                     <input 
@@ -401,8 +340,8 @@ export default function Registration() {
                         className="w-full px-4 py-3 rounded-lg border-none focus:ring-2 focus:ring-white outline-none transition-all bg-white"
                       >
                         <option value="">Pilih Fakultas</option>
-                        {Object.entries(FACULTY_DATA).map(([id, faculty]) => (
-                          <option key={id} value={id}>{faculty.name}</option>
+                        {FACULTIES.map((faculty) => (
+                          <option key={faculty.id} value={faculty.id}>{faculty.name}</option>
                         ))}
                       </select>
                     </div>
@@ -452,21 +391,23 @@ export default function Registration() {
             )}
           </div>
 
-          <div className="px-8 py-6 bg-slate-50 border-t border-slate-200 flex justify-between gap-4">
-            {step > 1 && step < 4 && (
-              <button 
-                onClick={() => setStep(step - 1)}
-                className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors"
-              >
-                Kembali
-              </button>
-            )}
-            <div className="flex gap-4 ml-auto">
+          <div className="px-4 md:px-8 py-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between gap-4">
+            <div className="flex gap-2 w-full sm:w-auto">
+              {step > 1 && step < 4 && (
+                <button 
+                  onClick={() => setStep(step - 1)}
+                  className="flex-1 sm:flex-none px-4 md:px-6 py-2.5 md:py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors text-xs md:text-sm border border-transparent"
+                >
+                  Kembali
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto ml-auto">
               {step < 4 && (
                 <button 
                   onClick={() => handleSave(false)}
                   disabled={saving}
-                  className="px-6 py-2 flex items-center gap-2 rounded-xl font-bold text-blue-600 bg-white border border-blue-600 hover:bg-blue-50 transition-colors"
+                  className="w-full sm:w-auto px-4 md:px-6 py-2.5 md:py-2 flex items-center justify-center gap-2 rounded-xl font-bold text-blue-600 bg-white border border-blue-600 hover:bg-blue-50 transition-colors text-xs md:text-sm"
                 >
                   <Save size={18} /> {saving ? 'Menyimpan...' : 'Simpan Draft'}
                 </button>
@@ -474,26 +415,26 @@ export default function Registration() {
               {step < 3 ? (
                 <button 
                   onClick={() => setStep(step + 1)}
-                  className="px-8 py-2 bg-blue-900 text-white rounded-xl font-bold hover:bg-blue-800 shadow-lg shadow-blue-100 transition-all active:scale-95"
+                  className="w-full sm:w-auto px-6 md:px-8 py-2.5 md:py-2 bg-blue-900 text-white rounded-xl font-bold hover:bg-blue-800 shadow-lg shadow-blue-100 transition-all active:scale-95 text-xs md:text-sm"
                 >
                   Lanjut
                 </button>
               ) : step === 3 ? (
                 <button 
                   onClick={() => setStep(step + 1)}
-                  className="px-8 py-2 bg-blue-900 text-white rounded-xl font-bold hover:bg-blue-800 shadow-lg shadow-blue-100 transition-all"
+                  className="w-full sm:w-auto px-6 md:px-8 py-2.5 md:py-2 bg-blue-900 text-white rounded-xl font-bold hover:bg-blue-800 shadow-lg shadow-blue-100 transition-all text-xs md:text-sm"
                 >
                   Review
                 </button>
-              ) : (
+              ) : step === 4 ? (
                 <button 
                   onClick={() => handleSave(true)}
                   disabled={saving}
-                  className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-100 flex items-center gap-2 transition-all"
+                  className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-100 flex items-center justify-center gap-2 transition-all text-xs md:text-sm"
                 >
                   <Send size={18} /> Finalisasi & Ajukan
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         </motion.div>

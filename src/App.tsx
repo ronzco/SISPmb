@@ -15,6 +15,7 @@ import Announcements from './pages/Announcements';
 import Fees from './pages/Fees';
 import AdminDashboard from './pages/Admin';
 import Login from './pages/Login';
+import Register from './pages/Register';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -25,22 +26,15 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        // Fetch or create profile
+        // Fetch profile
         const profileRef = doc(db, 'users', firebaseUser.uid);
         const profileSnap = await getDoc(profileRef);
         
         if (profileSnap.exists()) {
           setProfile(profileSnap.data() as UserProfile);
         } else {
-          const newProfile: UserProfile = {
-            uid: firebaseUser.uid,
-            fullName: firebaseUser.displayName || 'Prospective Student',
-            email: firebaseUser.email || '',
-            role: 'applicant',
-            createdAt: Date.now(),
-          };
-          await setDoc(profileRef, newProfile);
-          setProfile(newProfile);
+          // No profile found - user might be in process of role selection or unauthorized
+          setProfile(null);
         }
       } else {
         setProfile(null);
@@ -67,12 +61,16 @@ export default function App() {
       <Routes>
         <Route 
           path="/login" 
-          element={!user ? <Login /> : <Navigate to="/" replace />} 
+          element={!(user && profile) ? <Login /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/register" 
+          element={!(user && profile) ? <Register /> : <Navigate to="/" replace />} 
         />
         
         <Route 
           path="/" 
-          element={user ? <Shell user={user} profile={profile} /> : <Navigate to="/login" replace />}
+          element={user && profile ? <Shell user={user} profile={profile} /> : <Navigate to="/login" replace />}
         >
           <Route index element={profile?.role === 'applicant' ? <Dashboard /> : <Navigate to="/admin" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
