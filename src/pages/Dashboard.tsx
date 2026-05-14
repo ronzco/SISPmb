@@ -84,6 +84,85 @@ export default function Dashboard() {
     return 'pending';
   };
 
+  const handleDownloadCard = () => {
+    // Simulated print/download logic
+    const printContent = document.getElementById('exam-card-print');
+    if (!printContent) return;
+    
+    const originalContent = document.body.innerHTML;
+    const printArea = printContent.innerHTML;
+    
+    document.body.innerHTML = `
+      <html>
+        <head>
+          <title>Kartu Ujian - ${application?.fullName}</title>
+          <style>
+            @media print {
+              body { font-family: sans-serif; padding: 20px; }
+              .card { border: 2px solid #000; padding: 20px; width: 500px; margin: 0 auto; }
+              .barcode { letter-spacing: 2px; font-family: monospace; font-size: 24px; margin-top: 10px; }
+            }
+            body { font-family: sans-serif; padding: 20px; }
+            .card { border: 2px solid #000; padding: 20px; width: 500px; margin: 0 auto; border-radius: 10px; }
+            .header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; text-align: center; }
+            .content { line-height: 1.6; }
+            .footer { margin-top: 20px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 10px; }
+            .barcode-svg { width: 100%; height: 60px; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <h2 style="margin:0">UNIVERSITAS NUSANTARA (UNUTN)</h2>
+              <p style="margin:5px 0">KARTU PESERTA SELEKSI PENERIMAAN MAHASISWA BARU</p>
+            </div>
+            <div class="content">
+              <p><strong>Nomor Peserta:</strong> ${application?.participantNumber}</p>
+              <p><strong>Nama Lengkap:</strong> ${application?.fullName}</p>
+              <p><strong>Program Studi:</strong> ${application?.major}</p>
+              <p><strong>Kode Seleksi:</strong> ${application?.selectionCode}</p>
+              <p><strong>Lokasi:</strong> Kampus I UNUTN Kuningan</p>
+            </div>
+            <div style="text-align:center">
+               <div class="barcode">|||| ||||| || |||| ||||| |||</div>
+               <p style="font-size:12px; margin:0">${application?.selectionCode}</p>
+            </div>
+            <div class="footer">
+              <p>* Kartu ini wajib dibawa saat pelaksanaan ujian tertulis.</p>
+              <p>* Dicetak pada: ${new Date().toLocaleString()}</p>
+            </div>
+          </div>
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `;
+    
+    window.print();
+    document.body.innerHTML = originalContent;
+    window.location.reload(); // Reload to restore React app state
+  };
+
+  const BarcodeSim = ({ code }: { code: string }) => (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex gap-[2px] h-10 items-end">
+        {Array.from({ length: 40 }).map((_, i) => (
+          <div 
+            key={i} 
+            className="bg-black dark:bg-white" 
+            style={{ 
+              width: `${(i % 3 === 0 ? 3 : 1)}px`, 
+              height: `${Math.random() * 20 + 20}px`,
+              opacity: Math.random() > 0.1 ? 1 : 0
+            }} 
+          />
+        ))}
+      </div>
+      <span className="font-mono text-[10px] tracking-[0.2em]">{code}</span>
+    </div>
+  );
+
   if (fetchError) return (
     <div className="max-w-xl mx-auto mt-12 p-10 bg-white dark:bg-[#151921] rounded-[2.5rem] border border-red-200 dark:border-red-900/30 text-center">
       <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -104,6 +183,60 @@ export default function Dashboard() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 max-w-[1280px] mx-auto pb-20 px-4 sm:px-0">
+      
+      {/* Congratulations Banner */}
+      {application?.status === 'accepted' && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden group"
+        >
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-1000"></div>
+          <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-emerald-900/20 rounded-full blur-2xl"></div>
+          
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
+            <div className="w-32 h-32 md:w-48 md:h-48 bg-white/20 rounded-[2.5rem] backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl shrink-0">
+               <Trophy size={64} className="text-white drop-shadow-lg animate-bounce" />
+            </div>
+            
+            <div className="text-center md:text-left space-y-4">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/20 rounded-full border border-white/30 backdrop-blur-sm">
+                <CheckCircle2 size={16} />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Seleksi Penerimaan Mahasiswa Baru</span>
+              </div>
+              <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none">SELAMAT, {profile?.fullName?.toUpperCase()}!</h1>
+              <p className="text-lg md:text-xl font-medium opacity-90 max-w-2xl leading-relaxed">
+                Berdasarkan hasil seleksi tulis dan wawancara, Anda dinyatakan <span className="font-black underline decoration-white/50 underline-offset-8">LULUS</span> dan diterima sebagai mahasiswa baru di <span className="font-black">{application.major}</span> UNUTN.
+              </p>
+              
+              <div className="pt-6 flex flex-col sm:flex-row items-center gap-4">
+                 <button 
+                  onClick={() => window.location.href = '#tuition-section'}
+                  className="px-10 py-5 bg-white text-emerald-600 rounded-2xl font-black text-xs tracking-widest uppercase hover:bg-emerald-50 transition-all shadow-xl active:scale-95"
+                 >
+                   Selesaikan Pembayaran Kuliah
+                 </button>
+                 <button className="flex items-center gap-2 text-white/80 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors">
+                    <Download size={14} /> Download Surat Kelulusan
+                 </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {application?.status === 'rejected' && (
+        <div className="bg-rose-50 dark:bg-rose-900/20 rounded-[2.5rem] p-10 border border-rose-100 dark:border-rose-800 text-center space-y-4">
+          <div className="w-16 h-16 bg-rose-500 rounded-full flex items-center justify-center text-white mx-auto shadow-lg shadow-rose-200 dark:shadow-none">
+            <Share2 size={24} />
+          </div>
+          <h2 className="text-2xl font-black text-rose-800 dark:text-rose-400 uppercase tracking-tight">Mohon Maaf</h2>
+          <p className="max-w-md mx-auto text-rose-600 dark:text-rose-300 font-medium leading-relaxed">
+            Berdasarkan hasil seleksi, Anda belum dapat bergabung dengan UNUTN tahun ini. Tetap semangat dan jangan menyerah untuk masa depan Anda.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-[#151921] rounded-3xl border border-slate-200 dark:border-slate-800 p-8 md:p-10 shadow-sm relative overflow-hidden group transition-all duration-500">
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 dark:bg-blue-900/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -188,7 +321,7 @@ export default function Dashboard() {
                       </p>
                       {application?.selectionCode && (
                         <button 
-                          onClick={() => alert(`Sistem sedang menyiapkan berkas PDF Kartu Ujian untuk: ${application.selectionCode}`)}
+                          onClick={handleDownloadCard}
                           className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-white text-blue-900 rounded-2xl text-[11px] font-black tracking-widest uppercase hover:bg-slate-50 transition-all shadow-xl active:scale-95 group/btn"
                         >
                           <Download size={18} className="group-hover/btn:translate-y-0.5 transition-transform" />
@@ -209,11 +342,14 @@ export default function Dashboard() {
                   </div>
                 </div>
                 
-                <div className="hidden lg:block w-40 h-40 bg-white p-3 rounded-2xl shadow-inner relative">
-                  <div className="w-full h-full bg-slate-50 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-200">
-                    <QrCode size={64} className="text-slate-300" />
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-transparent pointer-events-none"></div>
+                <div className="hidden lg:block w-fit bg-white p-6 rounded-2xl shadow-inner relative">
+                  {application?.selectionCode ? (
+                    <BarcodeSim code={application.selectionCode} />
+                  ) : (
+                    <div className="w-32 h-32 bg-slate-50 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-200">
+                      <QrCode size={64} className="text-slate-300" />
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -352,20 +488,37 @@ export default function Dashboard() {
               </div>
            </div>
 
-           <div className="bg-slate-50 dark:bg-slate-800/30 rounded-3xl p-6 md:p-8 border border-slate-100 dark:border-slate-800">
-              <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4">Informasi UKT/Biaya</h3>
-              <div className="space-y-2">
-                 {fees.slice(0, 3).map((fee) => (
-                   <div key={fee.id} className="flex justify-between items-center bg-white dark:bg-[#1A1F29] p-3 rounded-xl border border-slate-100 dark:border-slate-800 transition-colors">
-                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase truncate pr-2">{fee.description}</span>
-                      <span className="text-xs font-black text-slate-800 dark:text-white shrink-0 font-mono">Rp {fee.amount.toLocaleString('id-ID')}</span>
+           <div id="tuition-section" className="bg-slate-50 dark:bg-slate-800/30 rounded-3xl p-6 md:p-8 border border-slate-100 dark:border-slate-800">
+              <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4">Informasi UKT/Biaya Pendidikan</h3>
+              
+              {application?.status === 'accepted' && (
+                <div className="mb-6 p-5 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-900/10">
+                  <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <Bell size={14} /> Kewajiban Pembayaran
+                  </p>
+                  <p className="text-xs font-medium text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                    Silakan melakukan pembayaran biaya kuliah semester pertama sesuai dengan Program Studi pilihan Anda untuk mendapatkan Nomor Induk Mahasiswa (NIM).
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                 {fees.length > 0 ? fees.filter(f => !application?.major || f.description.toLowerCase().includes(application.major.toLowerCase()) || f.description.toLowerCase().includes('registrasi')).map((fee) => (
+                   <div key={fee.id} className="flex justify-between items-center bg-white dark:bg-[#1A1F29] p-4 rounded-xl border border-slate-100 dark:border-slate-800 transition-all hover:border-emerald-500 shadow-sm">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Biaya Pendidikan</span>
+                        <span className="text-xs font-black text-slate-800 dark:text-white uppercase pr-2">{fee.description}</span>
+                      </div>
+                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 shrink-0 font-mono">Rp {fee.amount.toLocaleString('id-ID')}</span>
                    </div>
-                 ))}
+                 )) : (
+                   <div className="text-center py-4 text-[10px] text-slate-400">Belum ada rincian biaya spesifik.</div>
+                 )}
                  <button 
-                   onClick={() => window.location.href = '/fees'}
-                   className="w-full mt-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest rounded-xl hover:bg-blue-50 dark:hover:bg-slate-700 transition-all shadow-sm flex items-center justify-center gap-2"
+                   onClick={() => window.location.href = '/payment?type=tuition'}
+                   className="w-full mt-4 py-4 bg-emerald-600 text-white border-none text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 dark:shadow-none flex items-center justify-center gap-2"
                  >
-                   STRUKTUR BIAYA & PRODI <FileText size={14} />
+                   BAYAR BIAYA KULIAH <CreditCard size={14} />
                  </button>
               </div>
            </div>

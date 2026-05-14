@@ -6,10 +6,29 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, CheckCircle, Clock, AlertCircle, Search, 
   Filter, Download, Eye, Check, X, BarChart3, TrendingUp,
-  Megaphone, DollarSign, Plus, Trash2, Edit, Save, ShieldCheck, CreditCard, FileText
+  Megaphone, DollarSign, Plus, Trash2, Edit, Save, ShieldCheck, CreditCard, FileText, QrCode
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { FACULTIES, getProgramById } from '../constants/programs';
+
+const BarcodeSim = ({ code }: { code: string }) => (
+  <div className="flex flex-col items-center gap-1">
+    <div className="flex gap-[2px] h-8 items-end">
+      {Array.from({ length: 30 }).map((_, i) => (
+        <div 
+          key={i} 
+          className="bg-black dark:bg-white" 
+          style={{ 
+            width: `${(i % 3 === 0 ? 2 : 1)}px`, 
+            height: `${Math.random() * 15 + 15}px`,
+            opacity: Math.random() > 0.1 ? 1 : 0
+          }} 
+        />
+      ))}
+    </div>
+    <span className="font-mono text-[9px] tracking-[0.2em]">{code}</span>
+  </div>
+);
 
 export default function AdminDashboard() {
   const { profile } = useOutletContext<{ profile: AuthUser }>();
@@ -857,21 +876,22 @@ export default function AdminDashboard() {
       </AnimatePresence>
       {/* Details Modal Redesign */}
       {selectedApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-slate-900/60 dark:bg-black/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-8 bg-slate-900/80 dark:bg-black/90 backdrop-blur-sm">
           <motion.div 
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="bg-white dark:bg-[#151921] rounded-[2rem] md:rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col border border-white/20 dark:border-slate-800"
+            className="bg-white dark:bg-[#151921] rounded-[1.5rem] md:rounded-[2.5rem] shadow-2xl w-full max-w-6xl h-full max-h-[95vh] overflow-hidden flex flex-col border border-white/20 dark:border-slate-800"
           >
-            <div className="p-5 md:p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-900 dark:bg-black text-white shrink-0">
-               <div className="flex items-center gap-4 md:gap-6">
-                  <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[1.25rem] bg-blue-600 flex items-center justify-center text-xl md:text-2xl font-black shadow-lg shadow-blue-500/20">
+            {/* Modal Header */}
+            <div className="p-4 md:p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-900 dark:bg-black text-white shrink-0">
+               <div className="flex items-center gap-3 md:gap-6">
+                  <div className="w-10 h-10 md:w-16 md:h-16 rounded-lg md:rounded-[1.25rem] bg-blue-600 flex items-center justify-center text-lg md:text-2xl font-black shadow-lg shadow-blue-500/20">
                      {selectedApp.fullName.charAt(0)}
                   </div>
                   <div>
-                    <h3 className="text-lg md:text-2xl font-black tracking-tight leading-none uppercase">{selectedApp.fullName}</h3>
-                    <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-1 md:mt-2">
-                       <span className="font-mono text-[8px] md:text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest bg-slate-800 dark:bg-slate-900 px-2 py-0.5 rounded">ID: {selectedApp.id}</span>
+                    <h3 className="text-sm md:text-2xl font-black tracking-tight leading-tight uppercase truncate max-w-[200px] md:max-w-none">{selectedApp.fullName}</h3>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                       <span className="font-mono text-[8px] md:text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest bg-slate-800 dark:bg-slate-900 px-2 py-0.5 rounded">ID: {selectedApp.id.substring(0, 8)}</span>
                        <span className={cn(
                          "px-2 py-0.5 rounded text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] border",
                          selectedApp.status === 'accepted' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
@@ -883,103 +903,125 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                </div>
-               <button 
-                  onClick={() => setSelectedApp(null)}
-                  className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-colors text-white/50 hover:text-white"
-               >
-                  <X size={24} />
-               </button>
+               <div className="flex items-center gap-4">
+                  {selectedApp.selectionCode && (
+                    <div className="hidden sm:block p-3 bg-white rounded-xl shadow-inner">
+                       <BarcodeSim code={selectedApp.selectionCode} />
+                    </div>
+                  )}
+                  <button 
+                     onClick={() => setSelectedApp(null)}
+                     className="p-2 md:p-3 bg-white/5 hover:bg-white/10 rounded-xl md:rounded-2xl transition-colors text-white/50 hover:text-white"
+                  >
+                     <X size={20} />
+                  </button>
+               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-5 md:p-10 bg-[#FBFCFD] dark:bg-[#0D1117] custom-scrollbar">
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-10 bg-[#FBFCFD] dark:bg-[#0D1117] custom-scrollbar space-y-8">
                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
-                  {/* Left Column: Bento Grid for Info */}
-                  <div className="lg:col-span-4 space-y-6 md:space-y-8">
-                     <div className="bg-white dark:bg-[#151921] p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 dark:bg-blue-900/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-125 transition-transform"></div>
-                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-4 md:mb-6 flex items-center gap-2 relative z-10">
-                           <Users size={14} className="text-blue-600 dark:text-blue-400" /> Personal Identity
+                  {/* Left Column: Essential Info */}
+                  <div className="lg:col-span-4 space-y-6">
+                     <div className="bg-white dark:bg-[#151921] p-6 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden group">
+                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                           <Users size={14} className="text-blue-600 dark:text-blue-400" /> Profil Peserta
                         </h4>
-                        <div className="space-y-4 md:space-y-6 relative z-10">
+                        <div className="space-y-6">
                            <div>
-                              <p className="text-[9px] md:text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Academic Background</p>
-                              <p className="font-black text-slate-800 dark:text-white text-sm md:text-base leading-tight mt-1 uppercase">{selectedApp.previousSchool}</p>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Email Kontak</p>
+                              <p className="font-bold text-slate-800 dark:text-white text-sm mt-1">{selectedApp.email || 'N/A'}</p>
                            </div>
                            <div>
-                              <p className="text-[9px] md:text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Target Program</p>
-                              <p className="font-black text-blue-700 dark:text-blue-400 text-base md:text-lg leading-tight mt-1 uppercase">{selectedApp.major}</p>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Asal Sekolah</p>
+                              <p className="font-black text-slate-800 dark:text-white text-sm mt-1 uppercase leading-tight">{selectedApp.previousSchool || 'N/A'}</p>
                            </div>
-                           <div className="pt-4 md:pt-6 border-t border-slate-50 dark:border-slate-800">
-                              <p className="text-[9px] md:text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Payment Fulfillment</p>
+                           <div>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Program Studi Pilihan</p>
+                              <p className="font-black text-blue-700 dark:text-blue-400 text-lg mt-1 uppercase leading-tight">{selectedApp.major}</p>
+                           </div>
+                           <div className="pt-6 border-t border-slate-50 dark:border-slate-800">
+                              <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Status Pembayaran</p>
                               <div className="flex items-center gap-2 mt-2">
-                                 <div className={cn("w-2 h-2 rounded-full", appPayment?.status === 'success' ? "bg-emerald-500" : "bg-rose-500")}></div>
+                                 <div className={cn("w-2.5 h-2.5 rounded-full", appPayment?.status === 'success' ? "bg-emerald-500 animate-pulse" : "bg-rose-500")}></div>
                                  <p className={cn("font-black text-[10px] md:text-xs uppercase tracking-widest", appPayment?.status === 'success' ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
-                                   {appPayment?.status === 'success' ? `VERIFIED VIA ${appPayment.method}` : 'AWAITING PAYMENT'}
+                                   {appPayment?.status === 'success' ? `${appPayment.method || 'VERIFIED'}` : 'BELUM BAYAR'}
                                  </p>
                               </div>
                            </div>
                         </div>
                      </div>
- 
-                     {/* Stats for Applicant Performance */}
-                     <div className="bg-slate-900 dark:bg-black p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] text-white overflow-hidden relative border border-slate-800">
-                        <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-4 md:mb-6">Selection Metrics</h4>
-                        <div className="flex items-end justify-between">
+  
+                     {/* Score Panel */}
+                     <div className="bg-slate-900 dark:bg-black p-6 rounded-[1.5rem] text-white relative border border-slate-800 shadow-xl overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full translate-x-1/3 -translate-y-1/3 blur-2xl group-hover:scale-150 transition-transform duration-1000"></div>
+                        <h4 className="text-[10px] font-black text-slate-500 dark:text-slate-600 uppercase tracking-[0.2em] mb-4">Metrik Seleksi</h4>
+                        <div className="flex items-end justify-between relative z-10">
                            <div>
-                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase leading-none">Admission Score</p>
-                              <p className="text-4xl md:text-5xl font-black mt-2 tracking-tighter">{selectedApp.score || '--'}</p>
+                              <p className="text-[9px] font-medium text-slate-400 dark:text-slate-500 uppercase leading-none">Admission Score</p>
+                              <p className="text-5xl font-black mt-2 tracking-tighter text-blue-400">{selectedApp.score || '--'}</p>
                            </div>
                            <div className="text-right">
-                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase leading-none">Percentile</p>
-                              <p className="text-base md:text-lg font-black mt-1 text-blue-400">Top 12%</p>
+                              {selectedApp.status === 'accepted' ? (
+                                <div className="px-3 py-1.5 bg-emerald-500/20 border border-emerald-500/30 rounded-lg">
+                                  <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">Status</p>
+                                  <p className="text-[10px] font-black text-emerald-400 uppercase">LUMINOUS</p>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className="text-[9px] font-medium text-slate-400 dark:text-slate-500 uppercase leading-none italic">Awaiting Finalization</p>
+                                </div>
+                              )}
                            </div>
                         </div>
                      </div>
                   </div>
- 
-                  {/* Right Column: Files & Actions */}
-                  <div className="lg:col-span-8 space-y-6 md:space-y-10">
-                     <div className="bg-white dark:bg-[#151921] p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm">
+  
+                  {/* Right Column: Dynamic Content */}
+                  <div className="lg:col-span-8 space-y-8">
+                     {/* File Grid */}
+                     <div className="bg-white dark:bg-[#151921] p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm transition-all">
                         <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-6 md:mb-8 flex items-center gap-2">
-                           <FileText size={14} className="text-blue-600 dark:text-blue-400" /> Required Documentation
+                           <FileText size={14} className="text-blue-600 dark:text-blue-400" /> Verifikasi Dokumen Pendukung
                         </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                            {appDocs.map(docItem => (
-                              <div key={docItem.id} className="p-4 md:p-5 rounded-xl md:rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 hover:bg-white dark:hover:bg-slate-800 hover:border-blue-100 dark:hover:border-blue-900/50 hover:shadow-md transition-all group">
+                              <div key={docItem.id} className="p-4 md:p-6 rounded-xl md:rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 hover:bg-white dark:hover:bg-slate-800 hover:border-blue-200 dark:hover:border-blue-700 transition-all group">
                                  <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
-                                       <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:border-blue-100 dark:group-hover:border-blue-900/50 transition-all">
+                                       <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:border-blue-200 dark:group-hover:border-blue-800 transition-all">
                                           <FileText size={16} />
                                        </div>
-                                       <span className="text-[10px] md:text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tight">{docItem.type}</span>
+                                       <span className="text-[10px] md:text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tight truncate max-w-[120px]">{docItem.type}</span>
                                     </div>
-                                    <span className={cn(
-                                       "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                                       docItem.status === 'verified' ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" :
-                                       docItem.status === 'rejected' ? "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400" :
-                                       "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400"
+                                    <div className={cn(
+                                       "px-2.5 py-1 rounded-md text-[8px] font-black uppercase tracking-widest",
+                                       docItem.status === 'verified' ? "bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400" :
+                                       docItem.status === 'rejected' ? "bg-rose-50 dark:bg-rose-900/10 text-rose-600 dark:text-rose-400" :
+                                       "bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400"
                                     )}>
                                        {docItem.status}
-                                    </span>
+                                    </div>
                                  </div>
                                  
                                  <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <a href={docItem.url} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-[9px] font-black tracking-widest uppercase">View Document</a>
+                                    <a href={docItem.url} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-[9px] font-black tracking-widest uppercase hover:text-blue-700">Open Viewer</a>
                                     
                                     {hasPermission('manage_academic') && docItem.status === 'pending' && (
                                        <div className="flex gap-2">
                                           <button 
                                              onClick={() => updateDocStatus(docItem.id, 'verified')}
-                                             className="p-1.5 md:p-2 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-600 dark:hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                                             className="p-1.5 md:p-2 bg-emerald-600/10 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all"
+                                             title="Verify File"
                                           >
-                                             <Check size={12} className="md:w-[14px] md:h-[14px]" />
+                                             <Check size={14} />
                                           </button>
                                           <button 
                                              onClick={() => updateDocStatus(docItem.id, 'rejected')}
-                                             className="p-1.5 md:p-2 bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-600 dark:hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                                             className="p-1.5 md:p-2 bg-rose-600/10 text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white transition-all"
+                                             title="Reject File"
                                           >
-                                             <X size={12} className="md:w-[14px] md:h-[14px]" />
+                                             <X size={14} />
                                           </button>
                                        </div>
                                     )}
@@ -987,48 +1029,48 @@ export default function AdminDashboard() {
                               </div>
                            ))}
                            {appDocs.length === 0 && (
-                               <div className="sm:col-span-2 py-8 md:py-12 text-center bg-slate-50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">No documentation uploaded yet</p>
+                               <div className="col-span-full py-12 text-center bg-slate-50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">No documentation payload found</p>
                                </div>
                            )}
                         </div>
                      </div>
- 
-                     {/* Decision Panel */}
-                     <div className="bg-white dark:bg-[#151921] p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-6 md:mb-8">Admin Decision Workspace</h4>
+  
+                     {/* Control Panel */}
+                     <div className="bg-white dark:bg-[#151921] p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-8">Registry Decision Control</h4>
                         
                         <div className="space-y-6">
                            {hasPermission('manage_academic') && (
-                              <div className="flex flex-col gap-6">
+                              <div className="space-y-6">
                                  {(selectedApp.status === 'verifying' || selectedApp.status === 'submitted') && (
                                     <button 
                                        onClick={() => updateStatus('test_ready')} 
-                                       className="group w-full py-4 md:py-5 bg-blue-600 dark:bg-blue-600 text-white rounded-xl md:rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 md:gap-4 hover:bg-blue-700 dark:hover:bg-blue-500 hover:shadow-2xl hover:shadow-blue-200 dark:hover:shadow-none transition-all active:scale-[0.98] uppercase"
+                                       className="group w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-[11px] tracking-[0.2em] flex items-center justify-center gap-4 hover:bg-blue-700 shadow-xl shadow-blue-200 dark:shadow-none transition-all active:scale-[0.98] uppercase"
                                     >
-                                       <ShieldCheck size={20} className="group-hover:scale-110 transition-transform" /> VALIDATE & ISSUE TRACKING NO.
+                                       <ShieldCheck size={20} className="group-hover:scale-110 transition-transform" /> GENERATE TEST CREDENTIALS
                                     </button>
                                  )}
- 
+  
                                  {selectedApp.status === 'test_ready' && (
-                                    <div className="p-6 md:p-8 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl md:rounded-3xl border border-blue-100 dark:border-blue-900/30 space-y-4 md:space-y-6 border-dashed">
-                                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div className="p-6 md:p-8 bg-blue-50/30 dark:bg-blue-900/10 rounded-3xl border-2 border-dashed border-blue-200 dark:border-blue-900/30 space-y-6">
+                                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                           <div>
-                                             <h5 className="text-[11px] font-black text-blue-900 dark:text-blue-400 uppercase tracking-widest leading-none">Final Examination Results</h5>
-                                             <p className="text-[10px] text-blue-500 dark:text-blue-600 font-medium tracking-tight mt-2 uppercase">Input official entrance exam score.</p>
+                                             <h5 className="text-[11px] font-black text-blue-900 dark:text-blue-300 uppercase tracking-widest">Tahap Seleksi Tulis & Wawancara</h5>
+                                             <p className="text-[10px] text-blue-500 font-bold mt-1 uppercase">Input skor akhir untuk menentukan kelulusan.</p>
                                           </div>
-                                          <div className="px-3 py-1 bg-white dark:bg-slate-800 rounded-xl border border-blue-200 dark:border-blue-900/30 shadow-sm w-fit">
-                                             <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase">Stage: FINAL TEST</span>
+                                          <div className="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                                             <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">PHASE: FINAL EVAL</span>
                                           </div>
                                        </div>
                                        
-                                       <div className="flex flex-col sm:flex-row gap-4">
+                                       <div className="flex flex-col md:flex-row gap-4">
                                           <div className="relative flex-1">
-                                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300 dark:text-blue-900" size={16} />
+                                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400 font-black text-xs">VAL:</div>
                                              <input 
                                                type="number" 
-                                               placeholder="Final Score (0-100)"
-                                               className="w-full pl-12 pr-4 py-3.5 md:py-4 bg-white dark:bg-slate-900 dark:text-white border border-blue-200 dark:border-blue-900/30 rounded-2xl font-black text-sm tracking-tight outline-none focus:ring-4 focus:ring-blue-100/50 dark:focus:ring-blue-900/20"
+                                               placeholder="Final Outcome Score (0-100)"
+                                               className="w-full pl-14 pr-4 py-4 bg-white dark:bg-slate-900 dark:text-white border border-blue-200 dark:border-blue-900/30 rounded-2xl font-black text-sm tracking-tight focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 transition-all outline-none"
                                                onChange={(e) => {
                                                  const score = parseInt(e.target.value);
                                                  (window as any)._tempScore = score;
@@ -1038,30 +1080,32 @@ export default function AdminDashboard() {
                                           <div className="flex gap-2">
                                              <button 
                                                 onClick={() => updateStatus('accepted', (window as any)._tempScore)}
-                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-emerald-600 dark:bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-emerald-700 dark:hover:bg-emerald-500 shadow-lg shadow-emerald-100 dark:shadow-none uppercase transition-all active:scale-95"
+                                                className="flex-1 md:flex-none px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-widest hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-100 dark:shadow-none uppercase"
                                              >
-                                                Approve
+                                                Accepted
                                              </button>
                                              <button 
                                                 onClick={() => updateStatus('rejected')}
-                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-rose-600 dark:bg-rose-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-rose-700 dark:hover:bg-rose-500 shadow-lg shadow-rose-100 dark:shadow-none uppercase transition-all active:scale-95"
+                                                className="flex-1 md:flex-none px-8 py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] tracking-widest hover:bg-rose-700 transition-all active:scale-95 shadow-lg shadow-rose-100 dark:shadow-none uppercase"
                                              >
-                                                Reject
+                                                Rejected
                                              </button>
                                           </div>
                                        </div>
                                     </div>
                                  )}
- 
+  
                                  {(selectedApp.status === 'accepted' || selectedApp.status === 'rejected') && (
-                                    <div className="text-center py-6 md:py-10 bg-slate-50 dark:bg-slate-900/50 rounded-2xl md:rounded-3xl border border-slate-100 dark:border-slate-800">
-                                       <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em]">Current Decision Finalized</p>
-                                       <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white mt-2 uppercase tracking-tighter">{selectedApp.status}</p>
+                                    <div className="text-center py-10 bg-slate-50 dark:bg-slate-900/30 rounded-3xl border border-slate-100 dark:border-slate-800">
+                                       <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">Final Status Registered</p>
+                                       <h3 className={cn("text-3xl font-black mt-2 uppercase tracking-tighter", selectedApp.status === 'accepted' ? "text-emerald-600" : "text-rose-600")}>
+                                          {selectedApp.status}
+                                       </h3>
                                        <button 
                                           onClick={() => updateStatus('test_ready')}
-                                          className="mt-4 md:mt-6 text-[9px] md:text-[10px] font-black text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-6 py-2 rounded-xl transition-all uppercase tracking-widest border border-blue-100 dark:border-blue-900/30 shadow-sm"
+                                          className="mt-6 text-[10px] font-black text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 px-8 py-2.5 rounded-xl transition-all uppercase tracking-widest border border-blue-100 dark:border-blue-900/50"
                                        >
-                                          Rollback to Test Stage
+                                          Re-evaluate Stage
                                        </button>
                                     </div>
                                  )}
@@ -1074,26 +1118,19 @@ export default function AdminDashboard() {
                                     if (appPayment) {
                                       try {
                                         await dataApi.updatePaymentStatus(appPayment.id, 'success');
-                                        alert('Transaction verified successfully.');
+                                        alert('Receipt data synced successfully.');
                                         fetchDetails(selectedApp!);
                                       } catch (error) {
                                         console.error("Verification error:", error);
-                                        alert("Failed to verify transaction.");
+                                        alert("Critical Sync Failure: Billing verify failed.");
                                       }
                                     }
                                  }}
-                                 className="w-full py-4 md:py-5 bg-indigo-900 dark:bg-indigo-600 text-white rounded-xl md:rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-950 dark:hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-30 uppercase shadow-xl dark:shadow-none"
+                                 className="w-full py-5 bg-indigo-900 dark:bg-indigo-600 text-white rounded-2xl font-black text-[11px] tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-950 dark:hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-30 uppercase shadow-2xl dark:shadow-none"
                                  disabled={!appPayment || appPayment.status === 'success'}
                               >
-                                 <CreditCard size={18} /> Approve Billing Receipt
+                                 <CreditCard size={18} /> {appPayment?.status === 'success' ? 'LEDGER VERIFIED' : 'VERIFY BILLING RECEIPT'}
                               </button>
-                           )}
-                           {!hasPermission('manage_academic') && !hasPermission('manage_finance') && (
-                              <div className="text-center py-8">
-                                 <AlertCircle size={24} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
-                                 <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest leading-none">Administrative Credentials Required</p>
-                                 <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 uppercase tracking-tighter font-bold">Insufficient Permission Layer</p>
-                              </div>
                            )}
                         </div>
                      </div>
