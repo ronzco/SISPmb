@@ -44,9 +44,10 @@ export const dataApi = {
   getAdminApplications: () => api.get("/admin/applications"),
   updateApplicationStatus: (id: string, data: any) => api.patch(`/admin/applications/${id}/status`, data),
   
-  // Logs & Docs
+  // Logs & Docs & Payments
   getLogs: () => api.get("/admin/logs"),
   getUserDocuments: (userId: string) => api.get(`/admin/documents/${userId}`),
+  getUserPayment: (userId: string) => api.get(`/admin/payments/user/${userId}`),
   updateDocumentStatus: (docId: string, status: string) => api.patch(`/admin/documents/${docId}/status`, { status }),
   updatePaymentStatus: (id: string, status: string) => api.patch(`/admin/payments/${id}/status`, { status }),
 };

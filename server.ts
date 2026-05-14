@@ -32,7 +32,7 @@ async function startServer() {
 
   // Mount API routes
   app.use("/api/auth", authRoutes);
-  app.use("/api", dataRoutes);
+  app.use("/api", dataRoutes);    // All data routes (announcements, applications, docs, payments)
   app.use("/api/admin", adminRoutes);
 
   // Email routes (keep existing logic)

@@ -146,14 +146,22 @@ export default function AdminDashboard() {
   const fetchDetails = async (app: StudentApplication) => {
     setSelectedApp(app);
     try {
-      const res = await dataApi.getUserDocuments(app.userId);
-      setAppDocs(res.data);
+      const [docsRes, payRes] = await Promise.all([
+        dataApi.getUserDocuments(app.userId),
+        dataApi.getUserPayment(app.userId)
+      ]);
+      setAppDocs(docsRes.data);
+      setAppPayment(payRes.data);
     } catch (error) {
-      console.error("Error fetching user docs:", error);
+      console.error("Error fetching user details:", error);
     }
   };
 
   const updateDocStatus = async (docId: string, status: string) => {
+    if (status === 'verified' && appPayment?.status !== 'success') {
+      alert("Maaf, Admin tidak dapat melakukan verifikasi berkas jika calon mahasiswa belum melakukan pembayaran atau pembayaran belum diverifikasi.");
+      return;
+    }
     await dataApi.updateDocumentStatus(docId, status);
     if (selectedApp) fetchDetails(selectedApp);
   };
@@ -166,6 +174,13 @@ export default function AdminDashboard() {
 
   const updateStatus = async (status: ApplicationStatus, score?: number) => {
     if (!selectedApp) return;
+    
+    // Check payment if moving to test_ready or accepted
+    if (['test_ready', 'accepted'].includes(status) && appPayment?.status !== 'success') {
+      alert("Maaf, Admin tidak dapat melakukan verifikasi data pendaftaran jika calon mahasiswa belum melakukan pembayaran atau pembayaran belum diverifikasi.");
+      return;
+    }
+
     await dataApi.updateApplicationStatus(selectedApp.id, { status, score });
     alert(`Status updated to ${status}`);
     setSelectedApp(null);
@@ -229,25 +244,39 @@ export default function AdminDashboard() {
     revenue: allPayments.filter(p => p.status === 'success').reduce((sum, p) => sum + p.amount, 0)
   };
 
-  if (loading) return <div className="p-12 text-center">Loading Admin...</div>;
-  if (!isAdmin) return <div className="p-12 text-center text-red-600 font-bold">Akses Ditolak. Halaman ini hanya untuk Panitia Seleksi.</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center p-20 gap-4">
+      <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-slate-500 dark:text-slate-400 font-bold animate-pulse uppercase tracking-[0.2em] text-xs">Initializing Admin Core...</p>
+    </div>
+  );
+  
+  if (!isAdmin) return (
+    <div className="flex flex-col items-center justify-center p-20 gap-4 text-center">
+      <div className="w-20 h-20 bg-rose-50 dark:bg-rose-900/20 rounded-3xl flex items-center justify-center text-rose-500 dark:text-rose-400 mb-4 shadow-xl shadow-rose-100 dark:shadow-none translate-y-[-20%]">
+         <ShieldCheck size={40} />
+      </div>
+      <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Akses Ditolak</h2>
+      <p className="text-slate-500 dark:text-slate-400 font-medium max-w-sm">Halaman ini hanya dapat diakses oleh Panitia Seleksi dengan kredensial yang valid.</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto w-full px-4">
-      <div className="flex flex-col sm:flex-row justify-between gap-6 items-start sm:items-center">
+    <div className="space-y-8 max-w-7xl mx-auto w-full px-4 mb-20">
+      <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter leading-none">Management Console</h2>
+            <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter leading-none uppercase">Management Console</h2>
             <div className={cn(
-              "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shadow-sm",
-              adminRole === 'superadmin' ? "bg-purple-50 text-purple-700 border-purple-100" :
-              adminRole === 'committee_academic' ? "bg-blue-50 text-blue-700 border-blue-100" :
-              "bg-amber-50 text-amber-700 border-amber-100"
+              "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm",
+              adminRole === 'superadmin' ? "bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-100 dark:border-purple-900/30" :
+              adminRole === 'committee_academic' ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-100 dark:border-blue-900/30" :
+              "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900/30"
             )}>
               {adminRole?.replace('committee_', '')?.replace('_', ' ')}
             </div>
           </div>
-          <p className="text-slate-500 font-medium mt-2">Central hub for application processing and academic verification.</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium mt-3 text-sm md:text-base">Central hub for application processing and academic verification.</p>
         </div>
         {hasPermission('export_report') && (
           <button 
@@ -267,7 +296,7 @@ export default function AdminDashboard() {
                   a.click();
                   document.body.removeChild(a);
               }}
-              className="flex items-center gap-3 px-8 py-3.5 bg-slate-900 text-white rounded-2xl font-black text-xs tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 shrink-0"
+              className="flex items-center gap-3 px-8 py-4 bg-slate-900 dark:bg-blue-600 text-white rounded-2xl font-black text-[10px] tracking-widest hover:bg-slate-800 dark:hover:bg-blue-700 transition-all shadow-xl shadow-slate-200 dark:shadow-none shrink-0 uppercase active:scale-95"
           >
             <Download size={16} /> DOWNLOAD REPORT
           </button>
@@ -280,30 +309,30 @@ export default function AdminDashboard() {
           { label: 'Total Enrolled', sub: 'Gross Applicants', value: stats.total, icon: <Users size={24} />, color: 'blue' },
           { label: 'Billing Gap', sub: 'Pending Payments', value: stats.pendingPayments, icon: <DollarSign size={24} />, color: 'amber' },
           { label: 'Incomplete', sub: 'Pending Verification', value: stats.pendingDocs, icon: <AlertCircle size={24} />, color: 'rose' },
-          { label: 'Settlement', sub: 'Verified Revenue', value: `Rp ${(stats.revenue/1000000).toFixed(1)}M`, icon: <TrendingUp size={24} />, color: 'indigo' },
+          { label: 'Settlement', sub: 'Verified Revenue', value: stats.revenue > 1000000 ? `Rp ${(stats.revenue/1000000).toFixed(1)}M` : `Rp ${stats.revenue.toLocaleString()}`, icon: <TrendingUp size={24} />, color: 'indigo' },
         ].map((s, i) => (
-          <div key={i} className="group bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+          <div key={i} className="group bg-white dark:bg-[#151921] p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             <div className={cn(
-              "w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center mb-4 md:mb-6 transition-transform group-hover:scale-110",
-              s.color === 'blue' ? "bg-blue-50 text-blue-600" :
-              s.color === 'amber' ? "bg-amber-50 text-amber-600" :
-              s.color === 'emerald' ? "bg-emerald-50 text-emerald-600" :
-              "bg-indigo-50 text-indigo-600"
+              "w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110",
+              s.color === 'blue' ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" :
+              s.color === 'amber' ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" :
+              s.color === 'rose' ? "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400" :
+              "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
             )}>
               {s.icon}
             </div>
             <div>
-               <p className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">{s.label}</p>
-               <p className="text-3xl font-black text-slate-900 mt-1 tracking-tighter">{s.value}</p>
-               <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">{s.sub}</p>
+               <p className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-500 tracking-[0.2em]">{s.label}</p>
+               <p className="text-3xl font-black text-slate-900 dark:text-white mt-2 tracking-tighter">{s.value}</p>
+               <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-tight">{s.sub}</p>
             </div>
           </div>
         ))}
       </div>
 
       {/* Tabs Layout */}
-      <div className="relative mb-8 -mx-4 px-4 overflow-x-auto scrollbar-hide">
-        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-max border border-slate-200/50">
+      <div className="relative mb-8 -mx-4 px-4 overflow-x-auto no-scrollbar">
+        <div className="flex gap-2 p-1.5 bg-slate-100 dark:bg-slate-900/50 rounded-2xl w-max border border-slate-200 dark:border-slate-800">
           {[
             { id: 'applicants', label: 'Applicants', icon: <Users size={14} /> },
             { id: 'logs', label: 'Logs', icon: <ShieldCheck size={14} />, hidden: !hasPermission('view_logs') },
@@ -314,20 +343,20 @@ export default function AdminDashboard() {
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
               className={cn(
-                "px-4 md:px-6 py-2 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all relative z-10 whitespace-nowrap",
+                "px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all relative z-10 whitespace-nowrap",
                 activeTab === tab.id 
-                  ? "text-blue-600" 
-                  : "text-slate-500 hover:text-slate-700"
+                  ? "text-blue-600 dark:text-blue-400" 
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-400"
               )}
             >
               {activeTab === tab.id && (
                 <motion.div 
                   layoutId="activeTabAdmin"
-                  className="absolute inset-0 bg-white rounded-xl shadow-sm border border-slate-200 -z-10"
+                  className="absolute inset-0 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 -z-10"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
               )}
-              {tab.icon} {tab.label}
+              <div className="scale-110">{tab.icon}</div> {tab.label}
             </button>
           ))}
         </div>
@@ -340,25 +369,25 @@ export default function AdminDashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
+          className="bg-white dark:bg-[#151921] rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-colors"
         >
-        <div className="p-4 md:p-8 border-b border-slate-200 bg-slate-50/50 flex flex-col gap-4 md:gap-6">
+        <div className="p-6 md:p-10 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10 flex flex-col gap-6 ">
           <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
             <div className="relative flex-1 group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={18} />
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 group-focus-within:text-blue-600 transition-colors" size={20} />
               <input 
                 type="text" 
-                placeholder="Search..."
+                placeholder="Search candidates by name or ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-100 outline-none text-sm font-medium transition-all"
+                className="w-full pl-14 pr-6 py-4 bg-white dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 outline-none text-sm font-medium transition-all"
               />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:flex lg:flex-wrap gap-2">
               <select 
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
+                className="px-4 py-3.5 bg-white dark:bg-slate-900/50 dark:text-slate-300 border border-slate-200 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none hover:border-blue-400 transition-all cursor-pointer appearance-none"
               >
                 <option value="all">Stage: ALL</option>
                 <option value="submitted">SUBMITTED</option>
@@ -371,7 +400,7 @@ export default function AdminDashboard() {
               <select 
                 value={paymentFilter}
                 onChange={(e) => setPaymentFilter(e.target.value as any)}
-                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
+                className="px-4 py-3.5 bg-white dark:bg-slate-900/50 dark:text-slate-300 border border-slate-200 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none hover:border-blue-400 transition-all cursor-pointer appearance-none"
               >
                 <option value="all">Billing: ALL</option>
                 <option value="paid">PAID</option>
@@ -381,25 +410,14 @@ export default function AdminDashboard() {
               <select 
                 value={docsFilter}
                 onChange={(e) => setDocsFilter(e.target.value as any)}
-                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer"
+                className="px-4 py-3.5 bg-white dark:bg-slate-900/50 dark:text-slate-300 border border-slate-200 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none hover:border-blue-400 transition-all cursor-pointer appearance-none"
               >
                 <option value="all">Docs: ALL</option>
                 <option value="complete">COMPLETE</option>
                 <option value="incomplete">INCOMPL</option>
               </select>
  
-              <select 
-                value={majorFilter}
-                onChange={(e) => setMajorFilter(e.target.value)}
-                className="px-3 md:px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none hover:border-blue-300 transition-all cursor-pointer col-span-2 md:col-span-1"
-              >
-                <option value="all">Major: ALL</option>
-                {majors.map(m => (
-                  <option key={m as string} value={m as string}>{(m as string)?.toUpperCase()}</option>
-                ))}
-              </select>
- 
-              <div className="flex items-center bg-white border border-slate-200 rounded-2xl px-3 gap-2 col-span-2 md:col-span-2 lg:col-span-1">
+              <div className="flex items-center bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 gap-2">
                 <Filter size={14} className="text-slate-400" />
                 <select 
                   value={`${sortBy}-${sortOrder}`}
@@ -408,7 +426,7 @@ export default function AdminDashboard() {
                     setSortBy(field as any);
                     setSortOrder(order as any);
                   }}
-                  className="w-full py-3 bg-transparent text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none cursor-pointer"
+                  className="w-full py-3.5 bg-transparent text-[10px] dark:text-slate-300 font-black uppercase tracking-widest outline-none cursor-pointer appearance-none"
                 >
                   <option value="date-desc">Newest</option>
                   <option value="date-asc">Oldest</option>
@@ -418,45 +436,50 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
- 
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4 pt-4 md:pt-6 border-t border-slate-200/50">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-               <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">Date Range:</span>
-               <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-100 w-full sm:w-auto">
+  
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 pt-6 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+               <span className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">Date Range:</span>
+               <div className="flex items-center gap-2 bg-white dark:bg-slate-900/50 p-1.5 rounded-2xl border border-slate-100 dark:border-slate-800 w-full sm:w-auto">
                 <input 
                   type="date" 
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="flex-1 sm:flex-none px-2 py-1.5 rounded-lg text-[9px] font-black text-slate-600 outline-none focus:bg-slate-50 uppercase min-w-[110px]"
+                  className="flex-1 sm:flex-none px-3 py-2 rounded-xl text-[10px] font-black text-slate-600 dark:text-slate-400 outline-none hover:bg-slate-50 dark:hover:bg-slate-800 uppercase min-w-[130px] appearance-none"
                 />
-                <span className="text-slate-300">—</span>
+                <span className="text-slate-300 dark:text-slate-700">—</span>
                 <input 
                   type="date" 
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="flex-1 sm:flex-none px-2 py-1.5 rounded-lg text-[9px] font-black text-slate-600 outline-none focus:bg-slate-50 uppercase min-w-[110px]"
+                  className="flex-1 sm:flex-none px-3 py-2 rounded-xl text-[10px] font-black text-slate-600 dark:text-slate-400 outline-none hover:bg-slate-50 dark:hover:bg-slate-800 uppercase min-w-[130px] appearance-none"
                 />
                </div>
                {(startDate || endDate) && (
                  <button 
                    onClick={() => { setStartDate(''); setEndDate(''); }}
-                   className="text-[9px] text-red-500 font-black hover:underline uppercase tracking-widest px-2"
+                   className="text-[10px] text-rose-500 font-black hover:bg-rose-50 dark:hover:bg-rose-900/20 px-4 py-2 rounded-xl uppercase tracking-widest transition-all"
                  >
-                   Clear
+                   Clear Filter
                  </button>
                )}
             </div>
             
-            <div className="lg:ml-auto flex items-center justify-between lg:justify-end gap-3">
-               <div className="flex -space-x-2">
-                 {filteredApps.slice(0, 4).map((a, i) => (
-                   <div key={i} className="w-7 h-7 md:w-8 md:h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[9px] md:text-[10px] font-black text-slate-600 overflow-hidden shadow-sm">
+            <div className="lg:ml-auto flex items-center justify-between lg:justify-end gap-5">
+               <div className="flex -space-x-3">
+                 {filteredApps.slice(0, 5).map((a, i) => (
+                   <div key={i} className="w-9 h-9 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[11px] font-black text-slate-600 dark:text-slate-300 overflow-hidden shadow-sm uppercase">
                       {a.fullName.charAt(0)}
                    </div>
                  ))}
+                 {filteredApps.length > 5 && (
+                   <div className="w-9 h-9 rounded-full border-2 border-white dark:border-slate-800 bg-blue-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm">
+                      +{filteredApps.length - 5}
+                   </div>
+                 )}
                </div>
-               <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
-                <span className="text-blue-600">{filteredApps.length}</span> results found
+               <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+                <span className="text-blue-600 dark:text-blue-400 px-1">{filteredApps.length}</span> results found
                </p>
             </div>
           </div>
@@ -465,70 +488,68 @@ export default function AdminDashboard() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 text-[10px] uppercase font-black text-slate-400 tracking-[0.15em] border-b border-slate-100">
-                <th className="px-8 py-5">Participant ID</th>
-                <th className="px-8 py-5">Full Name</th>
-                <th className="px-8 py-5">Program</th>
-                <th className="px-8 py-5">Verification Status</th>
-                <th className="px-8 py-5">Process Stage</th>
-                <th className="px-8 py-5 text-right">Actions</th>
+              <tr className="bg-slate-50/50 dark:bg-slate-900/20 text-[10px] uppercase font-black text-slate-400 dark:text-slate-600 tracking-[0.2em] border-b border-slate-100 dark:border-slate-800/50">
+                <th className="px-10 py-6">Participant ID</th>
+                <th className="px-10 py-6">Candidate Identity</th>
+                <th className="px-10 py-6">Academic Program</th>
+                <th className="px-10 py-6">Verification</th>
+                <th className="px-10 py-6">Process Stage</th>
+                <th className="px-10 py-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
               {filteredApps.map(app => (
-                <tr key={app.id} className="group hover:bg-slate-50/80 transition-all">
-                  <td className="px-8 py-5 leading-none">
-                     <span className="font-mono text-[11px] font-bold text-slate-400 group-hover:text-blue-600 transition-colors">
+                <tr key={app.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-all">
+                  <td className="px-10 py-6 leading-none">
+                     <span className="font-mono text-[12px] font-bold text-slate-400 dark:text-slate-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors uppercase tracking-tight">
                         {app.participantNumber || 'NEW_ENTRY'}
                      </span>
                   </td>
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-3">
-                       <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                  <td className="px-10 py-6">
+                    <div className="flex items-center gap-4">
+                       <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[12px] font-black text-slate-600 dark:text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all uppercase shadow-sm">
                           {app.fullName.charAt(0)}
                        </div>
                        <div>
-                          <p className="font-black text-slate-800 text-sm tracking-tight leading-none">{app.fullName}</p>
-                          <p className="text-[10px] text-slate-400 font-medium mt-1 leading-none">{new Date(app.updatedAt).toLocaleDateString()}</p>
+                          <p className="font-black text-slate-800 dark:text-white text-base tracking-tight leading-none uppercase">{app.fullName}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold mt-2 leading-none uppercase tracking-widest">{new Date(app.updatedAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                        </div>
                     </div>
                   </td>
-                  <td className="px-8 py-5">
-                     <span className="text-xs font-bold text-slate-600">
+                  <td className="px-10 py-6">
+                     <p className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase underline decoration-blue-600/30 underline-offset-4">
                         {app.major}
-                     </span>
+                     </p>
                   </td>
-                  <td className="px-4 md:px-8 py-5">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4">
-                       <div className="flex flex-col gap-1">
-                          <div className={cn(
-                            "flex items-center gap-1.5 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                            getPaymentStatus(app.userId) === 'success' ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-50"
-                          )}>
-                             <CreditCard size={10} />
-                             {getPaymentStatus(app.userId)}
-                          </div>
-                          <div className={cn(
-                            "flex items-center gap-1.5 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                            getDocsStatus(app.userId) === 'complete' ? "text-blue-600 bg-blue-50" : "text-slate-400 bg-slate-50"
-                          )}>
-                             <FileText size={10} />
-                             {getDocsStatus(app.userId)}
-                          </div>
-                       </div>
+                  <td className="px-10 py-6">
+                    <div className="flex flex-col gap-2">
+                        <div className={cn(
+                          "inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest",
+                          getPaymentStatus(app.userId) === 'success' ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/10" : "text-slate-400 dark:text-slate-600 bg-slate-50 dark:bg-slate-900/10"
+                        )}>
+                            <CreditCard size={12} />
+                            {getPaymentStatus(app.userId)}
+                        </div>
+                        <div className={cn(
+                          "inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest",
+                          getDocsStatus(app.userId) === 'complete' ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/10" : "text-slate-400 dark:text-slate-600 bg-slate-50 dark:bg-slate-900/10"
+                        )}>
+                            <FileText size={12} />
+                            {getDocsStatus(app.userId)}
+                        </div>
                     </div>
                   </td>
-                  <td className="px-8 py-5">
+                  <td className="px-10 py-6">
                     <div className={cn(
-                      "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest",
-                      app.status === 'accepted' ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                      app.status === 'rejected' ? "bg-rose-50 text-rose-700 border border-rose-100" :
-                      app.status === 'verifying' ? "bg-blue-50 text-blue-700 border border-blue-100" :
-                      app.status === 'test_ready' ? "bg-indigo-50 text-indigo-700 border border-indigo-100" :
-                      "bg-slate-100 text-slate-500 border border-slate-200"
+                      "inline-flex items-center gap-2.5 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm",
+                      app.status === 'accepted' ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30" :
+                      app.status === 'rejected' ? "bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30" :
+                      app.status === 'verifying' ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30" :
+                      app.status === 'test_ready' ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30" :
+                      "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 border border-slate-200 dark:border-slate-700"
                     )}>
                       <div className={cn(
-                        "w-1.5 h-1.5 rounded-full animate-pulse",
+                        "w-2 h-2 rounded-full animate-pulse",
                         app.status === 'accepted' ? "bg-emerald-500" :
                         app.status === 'rejected' ? "bg-rose-500" :
                         app.status === 'verifying' ? "bg-blue-500" :
@@ -538,24 +559,24 @@ export default function AdminDashboard() {
                       {app.status?.replace('_', ' ')}
                     </div>
                   </td>
-                  <td className="px-8 py-5 text-right">
+                  <td className="px-10 py-6 text-right">
                     <button 
                       onClick={() => fetchDetails(app)}
-                      className="px-5 py-2.5 bg-white text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100 shadow-sm hover:bg-blue-600 hover:text-white hover:shadow-lg hover:shadow-blue-100 transition-all active:scale-95"
+                      className="px-6 py-3 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-blue-100 dark:border-slate-700 shadow-sm hover:bg-blue-600 dark:hover:bg-blue-600 hover:text-white dark:hover:text-white hover:shadow-xl hover:shadow-blue-100 dark:hover:shadow-none transition-all active:scale-95"
                     >
-                      VIEW PROFILE
+                      Process Application
                     </button>
                   </td>
                 </tr>
               ))}
               {filteredApps.length === 0 && (
                 <tr>
-                   <td colSpan={5} className="py-20 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
-                            <Search size={32} />
+                   <td colSpan={6} className="py-24 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                         <div className="w-20 h-20 bg-slate-50 dark:bg-slate-900 rounded-[2rem] flex items-center justify-center text-slate-200 dark:text-slate-800 shadow-inner">
+                            <Search size={40} />
                          </div>
-                         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">No matching records found</p>
+                         <p className="text-slate-400 dark:text-slate-600 text-[10px] font-black uppercase tracking-[0.2em]">No candidates match your current filter criteria</p>
                       </div>
                    </td>
                 </tr>
@@ -572,14 +593,14 @@ export default function AdminDashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden"
+          className="bg-white dark:bg-[#151921] rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden"
         >
-          <div className="p-8 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+          <div className="p-8 bg-slate-50 dark:bg-slate-900/10 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
             <div>
-               <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest leading-none">Security Audit Trail</h4>
-               <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Real-time monitoring of administrative access and data mutations</p>
+               <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest leading-none">Security Audit Trail</h4>
+               <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-2 uppercase tracking-tighter">Real-time monitoring of administrative access and data mutations</p>
             </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-slate-200 shadow-sm text-blue-600">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-blue-600 dark:text-blue-400">
                <ShieldCheck size={16} />
                <span className="text-[10px] font-black uppercase tracking-widest">Active Monitoring</span>
             </div>
@@ -587,36 +608,36 @@ export default function AdminDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50/50 text-[10px] uppercase font-black text-slate-400 tracking-[0.15em] border-b border-slate-100">
+                <tr className="bg-slate-50/50 dark:bg-slate-900/20 text-[10px] uppercase font-black text-slate-400 dark:text-slate-600 tracking-[0.15em] border-b border-slate-100 dark:border-slate-800/50">
                   <th className="px-8 py-5">Timestamp</th>
                   <th className="px-8 py-5">Operator ID</th>
                   <th className="px-8 py-5">Action Type</th>
                   <th className="px-8 py-5">Contextual Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                 {logs.map(log => (
-                  <tr key={log.id} className="group hover:bg-slate-50/50 transition-colors">
+                  <tr key={log.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
                     <td className="px-8 py-5">
-                       <span className="text-[11px] font-mono text-slate-500">{new Date(log.timestamp).toLocaleString('id-ID', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                       <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">{new Date(log.timestamp).toLocaleString('id-ID', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                     </td>
                     <td className="px-8 py-5">
                        <div className="flex items-center gap-2 group/id">
-                          <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 group-hover/id:bg-blue-600 group-hover/id:text-white transition-all">
+                          <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 dark:text-slate-400 group-hover/id:bg-blue-600 group-hover/id:text-white transition-all">
                              {log.userId?.charAt(0) || 'S'}
                           </div>
-                          <span className="font-mono text-[10px] text-slate-400 cursor-help" title={log.userId}>
+                          <span className="font-mono text-[10px] text-slate-400 dark:text-slate-600 cursor-help uppercase" title={log.userId}>
                             ...{log.userId?.substring(log.userId.length - 8)}
                           </span>
                        </div>
                     </td>
                     <td className="px-8 py-5">
-                      <span className="inline-flex px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-[9px] font-black uppercase tracking-widest border border-blue-100">
+                      <span className="inline-flex px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-md text-[9px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-900/30">
                          {log.action}
                       </span>
                     </td>
                     <td className="px-8 py-5">
-                       <p className="text-xs font-bold text-slate-600 max-w-md truncate group-hover:text-slate-900 group-hover:whitespace-normal transition-all">{log.details}</p>
+                       <p className="text-xs font-bold text-slate-600 dark:text-slate-400 max-w-md truncate group-hover:text-slate-900 dark:group-hover:text-white group-hover:whitespace-normal transition-all">{log.details}</p>
                     </td>
                   </tr>
                 ))}
@@ -634,10 +655,10 @@ export default function AdminDashboard() {
           exit={{ opacity: 0, y: -10 }}
           className="space-y-8"
         >
-          <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50"></div>
-            <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3 relative z-10">
-              <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+          <div className="bg-white dark:bg-[#151921] p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 dark:bg-blue-900/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50"></div>
+            <h3 className="text-lg font-black text-slate-800 dark:text-white mb-8 flex items-center gap-3 relative z-10">
+              <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200 dark:shadow-none">
                 <Plus size={20} />
               </div>
               PUBLISH SYSTEM BROADCAST
@@ -650,14 +671,14 @@ export default function AdminDashboard() {
                     placeholder="Broadcast Headline"
                     value={newAnnouncement.title}
                     onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100/50 font-black text-sm tracking-tight"
+                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100/50 dark:focus:ring-blue-900/20 font-black text-sm tracking-tight"
                   />
                </div>
                <div className="md:col-span-4">
                   <select 
                     value={newAnnouncement.type}
                     onChange={e => setNewAnnouncement({...newAnnouncement, type: e.target.value as any})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-black text-[10px] uppercase tracking-widest text-slate-500"
+                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl outline-none font-black text-[10px] uppercase tracking-widest text-slate-500"
                   >
                     <option value="info">INFO (NEUTRAL)</option>
                     <option value="warning">WARNING (ACTION REQ)</option>
@@ -669,13 +690,13 @@ export default function AdminDashboard() {
                     placeholder="Detailed messaging content..."
                     value={newAnnouncement.content}
                     onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl h-32 outline-none focus:ring-4 focus:ring-blue-100/50 font-medium text-sm leading-relaxed"
+                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl h-32 outline-none focus:ring-4 focus:ring-blue-100/50 dark:focus:ring-blue-900/20 font-medium text-sm leading-relaxed"
                   />
                </div>
                <div className="md:col-span-12">
                   <button 
                     onClick={handleAddAnnouncement}
-                    className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 uppercase"
+                    className="w-full py-5 bg-slate-900 dark:bg-blue-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-slate-800 dark:hover:bg-blue-700 transition-all shadow-xl shadow-slate-200 dark:shadow-none uppercase active:scale-95"
                   >
                     DISPATCH ANNOUNCEMENT
                   </button>
@@ -685,32 +706,33 @@ export default function AdminDashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {announcements.map(ann => (
-              <div key={ann.id} className="group bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <div key={ann.id} className="group bg-white dark:bg-[#151921] p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                 <div>
                    <div className="flex justify-between items-start mb-6">
                       <div className={cn(
                         "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border",
-                        ann.type === 'urgent' ? "bg-rose-50 text-rose-600 border-rose-100" :
-                        ann.type === 'warning' ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-blue-50 text-blue-600 border-blue-100"
+                        ann.type === 'urgent' ? "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900/30" :
+                        ann.type === 'warning' ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/30" : 
+                        "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/30"
                       )}>
                         {ann.type} notification
                       </div>
                       <button 
                         onClick={() => deleteItem('announcements', ann.id)}
-                        className="p-2 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-2 text-slate-300 dark:text-slate-700 hover:text-rose-500 dark:hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 size={16} />
                       </button>
                    </div>
-                   <h4 className="text-xl font-black text-slate-900 tracking-tight leading-tight">{ann.title}</h4>
-                   <p className="text-sm text-slate-500 mt-3 font-medium leading-relaxed">{ann.content}</p>
+                   <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight leading-tight uppercase">{ann.title}</h4>
+                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 font-medium leading-relaxed">{ann.content}</p>
                 </div>
-                <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-                   <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <div className="mt-8 pt-6 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                   <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
                       <Clock size={12} />
                       {new Date(ann.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                    </div>
-                   <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+                   <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-700">
                       <Megaphone size={14} />
                    </div>
                 </div>
@@ -728,10 +750,10 @@ export default function AdminDashboard() {
           exit={{ opacity: 0, y: -10 }}
           className="space-y-8"
         >
-          <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50"></div>
-             <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3 relative z-10">
-              <div className="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+          <div className="bg-white dark:bg-[#151921] p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 dark:bg-emerald-900/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50"></div>
+             <h3 className="text-lg font-black text-slate-800 dark:text-white mb-8 flex items-center gap-3 relative z-10">
+              <div className="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 dark:shadow-none">
                 <DollarSign size={20} />
               </div>
               FINANCIAL CONFIGURATION & PROGRAM PRICING
@@ -739,23 +761,23 @@ export default function AdminDashboard() {
             
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10">
                <div className="md:col-span-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Faculty</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2 block">Faculty</label>
                   <select 
                     value={newFee.facultyId}
                     onChange={e => setNewFee({...newFee, facultyId: e.target.value, programId: '', description: ''})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-bold text-sm tracking-tight"
+                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/20 font-bold text-sm tracking-tight"
                   >
                     <option value="">-- PILIH FAKULTAS --</option>
                     {FACULTIES.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
                </div>
                <div className="md:col-span-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Program Study</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2 block">Program Study</label>
                   <select 
                     value={newFee.programId}
                     onChange={e => setNewFee({...newFee, programId: e.target.value, description: ''})}
                     disabled={!newFee.facultyId}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-bold text-sm tracking-tight disabled:opacity-50"
+                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/20 font-bold text-sm tracking-tight disabled:opacity-50"
                   >
                     <option value="">-- SEMUA PRODI / PILIH PRODI --</option>
                     {FACULTIES.find(f => f.id === newFee.facultyId)?.programs.map(p => (
@@ -764,32 +786,32 @@ export default function AdminDashboard() {
                   </select>
                </div>
                <div className="md:col-span-4 relative">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Fee Amount</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2 block">Fee Amount</label>
                   <div className="relative">
-                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</div>
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 font-bold">Rp</div>
                     <input 
                       type="number" 
                       placeholder="Pricing..."
                       value={newFee.amount || ''}
                       onChange={e => setNewFee({...newFee, amount: Number(e.target.value)})}
-                      className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-mono font-bold text-sm"
+                      className="w-full pl-14 pr-6 py-4 bg-slate-50 dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/20 font-mono font-bold text-sm"
                     />
                   </div>
                </div>
                <div className="md:col-span-12">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Custom Label (Optional)</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2 block">Custom Label (Optional)</label>
                   <input 
                     type="text" 
                     placeholder="Auto-generated if empty (e.g., Biaya Pendidikan: Program Studi Akuntansi)"
                     value={newFee.description}
                     onChange={e => setNewFee({...newFee, description: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 font-bold text-sm tracking-tight"
+                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900/50 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/20 font-bold text-sm tracking-tight"
                   />
                </div>
                <div className="md:col-span-12">
                   <button 
                     onClick={handleAddFee}
-                    className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 uppercase"
+                    className="w-full py-5 bg-emerald-600 dark:bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 dark:shadow-none uppercase active:scale-95"
                   >
                     SET PRICE / UPDATE STRUCTURE
                   </button>
@@ -799,51 +821,49 @@ export default function AdminDashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {fees.map(fee => (
-              <div key={fee.id} className="group bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all">
+              <div key={fee.id} className="group bg-white dark:bg-[#151921] p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all">
                 <div className="flex justify-between items-start mb-8">
-                   <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                   <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                      <DollarSign size={24} />
                    </div>
                    <button 
                      onClick={() => deleteItem('fees_config', fee.id)}
-                     className="p-2 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                     className="p-2 text-slate-300 dark:text-slate-700 hover:text-rose-500 dark:hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
                    >
                      <Trash2 size={16} />
                    </button>
                 </div>
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fee.programId ? 'Major Pricing' : 'Global/Faculty Fee'}</p>
-                   <h4 className="text-lg font-black text-slate-800 mt-1 tracking-tight leading-tight">{fee.description}</h4>
+                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">{fee.programId ? 'Major Pricing' : 'Global/Faculty Fee'}</p>
+                   <h4 className="text-lg font-black text-slate-800 dark:text-white mt-1 tracking-tight leading-tight uppercase">{fee.description}</h4>
                    <div className="mt-6 flex items-baseline gap-1">
-                      <span className="text-sm font-bold text-slate-400">Rp</span>
-                      <span className="text-3xl font-black text-emerald-600 tracking-tighter">
+                      <span className="text-sm font-bold text-slate-400 dark:text-slate-600">Rp</span>
+                      <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tighter">
                          {fee.amount.toLocaleString('id-ID')}
                       </span>
                    </div>
-                   <p className="text-[9px] font-bold text-slate-400 mt-4 uppercase">Last updated: {new Date(fee.updatedAt).toLocaleDateString()}</p>
+                   <p className="text-[9px] font-bold text-slate-400 dark:text-slate-600 mt-4 uppercase">Last updated: {new Date(fee.updatedAt).toLocaleDateString()}</p>
                 </div>
               </div>
             ))}
             {fees.length === 0 && (
-               <div className="col-span-full py-20 text-center bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">No financial data configured</p>
+               <div className="col-span-full py-20 text-center bg-slate-50 dark:bg-slate-900/50 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800">
+                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em]">No financial data configured</p>
                </div>
             )}
           </div>
         </motion.div>
       )}
       </AnimatePresence>
-
-
       {/* Details Modal Redesign */}
       {selectedApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-slate-900/60 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-slate-900/60 dark:bg-black/80 backdrop-blur-md">
           <motion.div 
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col border border-white/20"
+            className="bg-white dark:bg-[#151921] rounded-[2rem] md:rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col border border-white/20 dark:border-slate-800"
           >
-            <div className="p-5 md:p-8 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white shrink-0">
+            <div className="p-5 md:p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-900 dark:bg-black text-white shrink-0">
                <div className="flex items-center gap-4 md:gap-6">
                   <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[1.25rem] bg-blue-600 flex items-center justify-center text-xl md:text-2xl font-black shadow-lg shadow-blue-500/20">
                      {selectedApp.fullName.charAt(0)}
@@ -851,7 +871,7 @@ export default function AdminDashboard() {
                   <div>
                     <h3 className="text-lg md:text-2xl font-black tracking-tight leading-none uppercase">{selectedApp.fullName}</h3>
                     <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-1 md:mt-2">
-                       <span className="font-mono text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">ID: {selectedApp.id}</span>
+                       <span className="font-mono text-[8px] md:text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest bg-slate-800 dark:bg-slate-900 px-2 py-0.5 rounded">ID: {selectedApp.id}</span>
                        <span className={cn(
                          "px-2 py-0.5 rounded text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] border",
                          selectedApp.status === 'accepted' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
@@ -869,29 +889,31 @@ export default function AdminDashboard() {
                >
                   <X size={24} />
                </button>
-            </div>            <div className="flex-1 overflow-y-auto p-5 md:p-10 bg-[#FBFCFD] custom-scrollbar">
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-5 md:p-10 bg-[#FBFCFD] dark:bg-[#0D1117] custom-scrollbar">
                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
                   {/* Left Column: Bento Grid for Info */}
                   <div className="lg:col-span-4 space-y-6 md:space-y-8">
-                     <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-125 transition-transform"></div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 md:mb-6 flex items-center gap-2 relative z-10">
-                           <Users size={14} className="text-blue-600" /> Personal Identity
+                     <div className="bg-white dark:bg-[#151921] p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 dark:bg-blue-900/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-125 transition-transform"></div>
+                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-4 md:mb-6 flex items-center gap-2 relative z-10">
+                           <Users size={14} className="text-blue-600 dark:text-blue-400" /> Personal Identity
                         </h4>
                         <div className="space-y-4 md:space-y-6 relative z-10">
                            <div>
-                              <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-tight">Academic Background</p>
-                              <p className="font-black text-slate-800 text-sm md:text-base leading-tight mt-1">{selectedApp.previousSchool}</p>
+                              <p className="text-[9px] md:text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Academic Background</p>
+                              <p className="font-black text-slate-800 dark:text-white text-sm md:text-base leading-tight mt-1 uppercase">{selectedApp.previousSchool}</p>
                            </div>
                            <div>
-                              <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-tight">Target Program</p>
-                              <p className="font-black text-blue-700 text-base md:text-lg leading-tight mt-1">{selectedApp.major}</p>
+                              <p className="text-[9px] md:text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Target Program</p>
+                              <p className="font-black text-blue-700 dark:text-blue-400 text-base md:text-lg leading-tight mt-1 uppercase">{selectedApp.major}</p>
                            </div>
-                           <div className="pt-4 md:pt-6 border-t border-slate-50">
-                              <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-tight">Payment Fulfillment</p>
+                           <div className="pt-4 md:pt-6 border-t border-slate-50 dark:border-slate-800">
+                              <p className="text-[9px] md:text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-tight">Payment Fulfillment</p>
                               <div className="flex items-center gap-2 mt-2">
                                  <div className={cn("w-2 h-2 rounded-full", appPayment?.status === 'success' ? "bg-emerald-500" : "bg-rose-500")}></div>
-                                 <p className={cn("font-black text-[10px] md:text-xs uppercase tracking-widest", appPayment?.status === 'success' ? "text-emerald-700" : "text-rose-700")}>
+                                 <p className={cn("font-black text-[10px] md:text-xs uppercase tracking-widest", appPayment?.status === 'success' ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
                                    {appPayment?.status === 'success' ? `VERIFIED VIA ${appPayment.method}` : 'AWAITING PAYMENT'}
                                  </p>
                               </div>
@@ -900,16 +922,16 @@ export default function AdminDashboard() {
                      </div>
  
                      {/* Stats for Applicant Performance */}
-                     <div className="bg-slate-900 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] text-white overflow-hidden relative">
+                     <div className="bg-slate-900 dark:bg-black p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] text-white overflow-hidden relative border border-slate-800">
                         <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 md:mb-6">Selection Metrics</h4>
+                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-4 md:mb-6">Selection Metrics</h4>
                         <div className="flex items-end justify-between">
                            <div>
-                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 uppercase leading-none">Admission Score</p>
+                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase leading-none">Admission Score</p>
                               <p className="text-4xl md:text-5xl font-black mt-2 tracking-tighter">{selectedApp.score || '--'}</p>
                            </div>
                            <div className="text-right">
-                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 uppercase leading-none">Percentile</p>
+                              <p className="text-[9px] md:text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase leading-none">Percentile</p>
                               <p className="text-base md:text-lg font-black mt-1 text-blue-400">Top 12%</p>
                            </div>
                         </div>
@@ -918,44 +940,44 @@ export default function AdminDashboard() {
  
                   {/* Right Column: Files & Actions */}
                   <div className="lg:col-span-8 space-y-6 md:space-y-10">
-                     <div className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 md:mb-8 flex items-center gap-2">
-                           <FileText size={14} className="text-blue-600" /> Required Documentation
+                     <div className="bg-white dark:bg-[#151921] p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-6 md:mb-8 flex items-center gap-2">
+                           <FileText size={14} className="text-blue-600 dark:text-blue-400" /> Required Documentation
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                            {appDocs.map(docItem => (
-                              <div key={docItem.id} className="p-4 md:p-5 rounded-xl md:rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all group">
+                              <div key={docItem.id} className="p-4 md:p-5 rounded-xl md:rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 hover:bg-white dark:hover:bg-slate-800 hover:border-blue-100 dark:hover:border-blue-900/50 hover:shadow-md transition-all group">
                                  <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
-                                       <div className="w-8 h-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:border-blue-100 transition-all">
+                                       <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:border-blue-100 dark:group-hover:border-blue-900/50 transition-all">
                                           <FileText size={16} />
                                        </div>
-                                       <span className="text-[10px] md:text-[11px] font-black text-slate-700 uppercase tracking-tight">{docItem.type}</span>
+                                       <span className="text-[10px] md:text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tight">{docItem.type}</span>
                                     </div>
                                     <span className={cn(
                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                                       docItem.status === 'verified' ? "bg-emerald-100 text-emerald-700" :
-                                       docItem.status === 'rejected' ? "bg-rose-100 text-rose-700" :
-                                       "bg-amber-100 text-amber-700"
+                                       docItem.status === 'verified' ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" :
+                                       docItem.status === 'rejected' ? "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400" :
+                                       "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400"
                                     )}>
                                        {docItem.status}
                                     </span>
                                  </div>
                                  
-                                 <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                                    <a href={docItem.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[9px] font-black tracking-widest uppercase">View Document</a>
+                                 <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <a href={docItem.url} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-[9px] font-black tracking-widest uppercase">View Document</a>
                                     
                                     {hasPermission('manage_academic') && docItem.status === 'pending' && (
                                        <div className="flex gap-2">
                                           <button 
                                              onClick={() => updateDocStatus(docItem.id, 'verified')}
-                                             className="p-1.5 md:p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                             className="p-1.5 md:p-2 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-600 dark:hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
                                           >
                                              <Check size={12} className="md:w-[14px] md:h-[14px]" />
                                           </button>
                                           <button 
                                              onClick={() => updateDocStatus(docItem.id, 'rejected')}
-                                             className="p-1.5 md:p-2 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white transition-all shadow-sm"
+                                             className="p-1.5 md:p-2 bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-600 dark:hover:bg-rose-500 hover:text-white transition-all shadow-sm"
                                           >
                                              <X size={12} className="md:w-[14px] md:h-[14px]" />
                                           </button>
@@ -965,16 +987,16 @@ export default function AdminDashboard() {
                               </div>
                            ))}
                            {appDocs.length === 0 && (
-                              <div className="sm:col-span-2 py-8 md:py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No documentation uploaded yet</p>
-                              </div>
+                               <div className="sm:col-span-2 py-8 md:py-12 text-center bg-slate-50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">No documentation uploaded yet</p>
+                               </div>
                            )}
                         </div>
                      </div>
  
                      {/* Decision Panel */}
-                     <div className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 md:mb-8">Admin Decision Workspace</h4>
+                     <div className="bg-white dark:bg-[#151921] p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+                        <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-6 md:mb-8">Admin Decision Workspace</h4>
                         
                         <div className="space-y-6">
                            {hasPermission('manage_academic') && (
@@ -982,31 +1004,31 @@ export default function AdminDashboard() {
                                  {(selectedApp.status === 'verifying' || selectedApp.status === 'submitted') && (
                                     <button 
                                        onClick={() => updateStatus('test_ready')} 
-                                       className="group w-full py-4 md:py-5 bg-blue-600 text-white rounded-xl md:rounded-2xl font-black text-xs tracking-[0.2em] flex items-center justify-center gap-3 md:gap-4 hover:bg-blue-700 hover:shadow-2xl hover:shadow-blue-200 transition-all active:scale-[0.98]"
+                                       className="group w-full py-4 md:py-5 bg-blue-600 dark:bg-blue-600 text-white rounded-xl md:rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 md:gap-4 hover:bg-blue-700 dark:hover:bg-blue-500 hover:shadow-2xl hover:shadow-blue-200 dark:hover:shadow-none transition-all active:scale-[0.98] uppercase"
                                     >
                                        <ShieldCheck size={20} className="group-hover:scale-110 transition-transform" /> VALIDATE & ISSUE TRACKING NO.
                                     </button>
                                  )}
  
                                  {selectedApp.status === 'test_ready' && (
-                                    <div className="p-6 md:p-8 bg-blue-50/50 rounded-2xl md:rounded-3xl border border-blue-100 space-y-4 md:space-y-6 border-dashed">
+                                    <div className="p-6 md:p-8 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl md:rounded-3xl border border-blue-100 dark:border-blue-900/30 space-y-4 md:space-y-6 border-dashed">
                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                           <div>
-                                             <h5 className="text-[11px] font-black text-blue-900 uppercase tracking-widest">Final Examination Results</h5>
-                                             <p className="text-[10px] text-blue-500 font-medium tracking-tight">Input official SKD score to determine eligibility.</p>
+                                             <h5 className="text-[11px] font-black text-blue-900 dark:text-blue-400 uppercase tracking-widest leading-none">Final Examination Results</h5>
+                                             <p className="text-[10px] text-blue-500 dark:text-blue-600 font-medium tracking-tight mt-2 uppercase">Input official entrance exam score.</p>
                                           </div>
-                                          <div className="px-3 py-1 bg-white rounded-xl border border-blue-200 shadow-sm w-fit">
-                                             <span className="text-[9px] font-black text-blue-600 uppercase">Stage: FINAL TEST</span>
+                                          <div className="px-3 py-1 bg-white dark:bg-slate-800 rounded-xl border border-blue-200 dark:border-blue-900/30 shadow-sm w-fit">
+                                             <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase">Stage: FINAL TEST</span>
                                           </div>
                                        </div>
                                        
                                        <div className="flex flex-col sm:flex-row gap-4">
                                           <div className="relative flex-1">
-                                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300" size={16} />
+                                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300 dark:text-blue-900" size={16} />
                                              <input 
                                                type="number" 
                                                placeholder="Final Score (0-100)"
-                                               className="w-full pl-12 pr-4 py-3.5 md:py-4 bg-white border border-blue-200 rounded-2xl font-black text-sm tracking-tight outline-none focus:ring-4 focus:ring-blue-100/50"
+                                               className="w-full pl-12 pr-4 py-3.5 md:py-4 bg-white dark:bg-slate-900 dark:text-white border border-blue-200 dark:border-blue-900/30 rounded-2xl font-black text-sm tracking-tight outline-none focus:ring-4 focus:ring-blue-100/50 dark:focus:ring-blue-900/20"
                                                onChange={(e) => {
                                                  const score = parseInt(e.target.value);
                                                  (window as any)._tempScore = score;
@@ -1016,13 +1038,13 @@ export default function AdminDashboard() {
                                           <div className="flex gap-2">
                                              <button 
                                                 onClick={() => updateStatus('accepted', (window as any)._tempScore)}
-                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-emerald-700 shadow-lg shadow-emerald-100 uppercase transition-all"
+                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-emerald-600 dark:bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-emerald-700 dark:hover:bg-emerald-500 shadow-lg shadow-emerald-100 dark:shadow-none uppercase transition-all active:scale-95"
                                              >
                                                 Approve
                                              </button>
                                              <button 
                                                 onClick={() => updateStatus('rejected')}
-                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-rose-700 shadow-lg shadow-rose-100 uppercase transition-all"
+                                                className="flex-1 sm:flex-none px-6 md:px-8 py-3.5 md:py-4 bg-rose-600 dark:bg-rose-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-rose-700 dark:hover:bg-rose-500 shadow-lg shadow-rose-100 dark:shadow-none uppercase transition-all active:scale-95"
                                              >
                                                 Reject
                                              </button>
@@ -1032,12 +1054,12 @@ export default function AdminDashboard() {
                                  )}
  
                                  {(selectedApp.status === 'accepted' || selectedApp.status === 'rejected') && (
-                                    <div className="text-center py-6 md:py-10 bg-slate-50 rounded-2xl md:rounded-3xl border border-slate-100">
-                                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Current Decision Finalized</p>
-                                       <p className="text-2xl md:text-3xl font-black text-slate-800 mt-2 uppercase tracking-tighter">{selectedApp.status}</p>
+                                    <div className="text-center py-6 md:py-10 bg-slate-50 dark:bg-slate-900/50 rounded-2xl md:rounded-3xl border border-slate-100 dark:border-slate-800">
+                                       <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em]">Current Decision Finalized</p>
+                                       <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white mt-2 uppercase tracking-tighter">{selectedApp.status}</p>
                                        <button 
                                           onClick={() => updateStatus('test_ready')}
-                                          className="mt-4 md:mt-6 text-[9px] md:text-[10px] font-black text-blue-600 hover:bg-blue-50 px-6 py-2 rounded-xl transition-all uppercase tracking-widest border border-blue-100 shadow-sm"
+                                          className="mt-4 md:mt-6 text-[9px] md:text-[10px] font-black text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-6 py-2 rounded-xl transition-all uppercase tracking-widest border border-blue-100 dark:border-blue-900/30 shadow-sm"
                                        >
                                           Rollback to Test Stage
                                        </button>
@@ -1060,7 +1082,7 @@ export default function AdminDashboard() {
                                       }
                                     }
                                  }}
-                                 className="w-full py-4 md:py-5 bg-indigo-900 text-white rounded-xl md:rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-950 transition-all active:scale-95 disabled:opacity-30 uppercase"
+                                 className="w-full py-4 md:py-5 bg-indigo-900 dark:bg-indigo-600 text-white rounded-xl md:rounded-2xl font-black text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-950 dark:hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-30 uppercase shadow-xl dark:shadow-none"
                                  disabled={!appPayment || appPayment.status === 'success'}
                               >
                                  <CreditCard size={18} /> Approve Billing Receipt
@@ -1068,9 +1090,9 @@ export default function AdminDashboard() {
                            )}
                            {!hasPermission('manage_academic') && !hasPermission('manage_finance') && (
                               <div className="text-center py-8">
-                                 <AlertCircle size={24} className="mx-auto text-slate-300 mb-2" />
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Administrative Credentials Required</p>
-                                 <p className="text-[10px] text-slate-400 mt-1 italic">You do not have permission to modify this entry.</p>
+                                 <AlertCircle size={24} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
+                                 <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest leading-none">Administrative Credentials Required</p>
+                                 <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 uppercase tracking-tighter font-bold">Insufficient Permission Layer</p>
                               </div>
                            )}
                         </div>
@@ -1081,7 +1103,6 @@ export default function AdminDashboard() {
           </motion.div>
         </div>
       )}
-
     </div>
   );
 }

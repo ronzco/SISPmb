@@ -4,8 +4,14 @@ import { applications, announcements, feeConfigs, users, documents, activityLogs
 import { eq, desc } from 'drizzle-orm';
 import { authenticate, authorize } from './middleware';
 import { v4 as uuidv4 } from 'uuid';
+import { sendEmail, sendWhatsApp } from './notificationService';
 
 const router = express.Router();
+
+// Helper to generate selection code
+const generateSelectionCode = () => {
+  return `SEL-${Date.now().toString().substring(7)}-${Math.floor(1000 + Math.random() * 9000)}`;
+};
 
 // Get all logs (admin only)
 router.get('/logs', authenticate, authorize(['superadmin']), async (req, res) => {
@@ -26,6 +32,17 @@ router.get('/documents/:userId', authenticate, authorize(['admin', 'superadmin']
     res.json(userDocs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch documents' });
+  }
+});
+
+// Get user payment
+router.get('/payments/user/:userId', authenticate, authorize(['admin', 'superadmin', 'committee_finance']), async (req, res) => {
+  try {
+    const db = await getDb();
+    const userPayment = await db.select().from(payments).where(eq(payments.userId, req.params.userId)).limit(1);
+    res.json(userPayment.length > 0 ? userPayment[0] : null);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch payment' });
   }
 });
 
@@ -69,16 +86,69 @@ router.patch('/applications/:id/status', authenticate, authorize(['admin', 'supe
   try {
     const db = await getDb();
     const { status, score, participantNumber } = req.body;
+    
+    // Check current state
+    const currentAppRes = await db.select().from(applications).where(eq(applications.id, req.params.id));
+    if (currentAppRes.length === 0) return res.status(404).json({ error: 'Application not found' });
+    const currentApp = currentAppRes[0];
+
+    // If status is becoming test_ready or accepted, check payment
+    if (['test_ready', 'accepted'].includes(status)) {
+      const dbPayment = await db.select().from(payments).where(eq(payments.userId, currentApp.userId)).limit(1);
+      if (dbPayment.length === 0 || dbPayment[0].status !== 'success') {
+        return res.status(400).json({ error: 'Pembayaran belum lunas atau belum diverifikasi. Admin tidak dapat mengubah status ini.' });
+      }
+    }
+
+    let selectionCode = currentApp.selectionCode;
+    
+    // If status is becoming test_ready and there's no selection code, generate one
+    if (status === 'test_ready' && !selectionCode) {
+      selectionCode = generateSelectionCode();
+      
+      // Notify user
+      const userRes = await db.select().from(users).where(eq(users.id, currentApp.userId));
+      if (userRes.length > 0) {
+        const user = userRes[0];
+        const msg = `Halo ${user.fullName}, pendaftaran Anda di SiPMB Online telah diverifikasi! Kode Seleksi Tulis Anda adalah: *${selectionCode}*. Silakan login ke dashboard untuk mencetak kartu ujian.`;
+        
+        // Send WhatsApp
+        if (user.phone) {
+          sendWhatsApp(user.phone, msg);
+        }
+        
+        // Send Email
+        sendEmail(user.email, "Kode Seleksi Tulis PMB Uniku", `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <h1 style="color: #1e3a8a; font-size: 24px;">Verifikasi Berhasil!</h1>
+            <p>Halo <strong>${user.fullName}</strong>,</p>
+            <p>Pendaftaran Anda telah diverifikasi oleh tim kami. Anda sekarang dapat mengikuti tahap selanjutnya yaitu Seleksi Tulis.</p>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; border: 2px dashed #cbd5e1;">
+              <p style="margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #64748b; font-weight: bold;">Kode Seleksi Tulis</p>
+              <p style="margin: 10px 0 0 0; font-size: 32px; font-weight: 900; color: #1e3a8a; font-family: monospace;">${selectionCode}</p>
+            </div>
+            <p>Silakan login ke dashboard Anda untuk mencetak Kartu Ujian Seleksi.</p>
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">
+              <p>Pesan ini dikirim secara otomatis oleh sistem pendaftaran mahasiswa baru.</p>
+            </div>
+          </div>
+        `);
+      }
+    }
+
     await db.update(applications)
       .set({ 
         status, 
         score: score !== undefined ? score : undefined,
         participantNumber: participantNumber || undefined,
+        selectionCode,
         updatedAt: new Date()
       })
       .where(eq(applications.id, req.params.id));
-    res.json({ message: 'Status updated' });
+      
+    res.json({ message: 'Status updated', selectionCode });
   } catch (error) {
+    console.error("Update status error:", error);
     res.status(500).json({ error: 'Failed to update status' });
   }
 });

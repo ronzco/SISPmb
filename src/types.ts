@@ -28,6 +28,7 @@ export interface StudentApplication {
   updatedAt: number;
   major?: string;
   participantNumber?: string;
+  selectionCode?: string;
   score?: number;
   reRegistrationPaid?: boolean;
 }

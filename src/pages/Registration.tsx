@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { dataApi } from '../lib/api';
-import { StudentApplication, ApplicationStatus, AuthUser } from '../types';
+import { StudentApplication, ApplicationStatus, AuthUser, RegistrationDocument } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, GraduationCap, MapPin, CheckCircle2, Save, Send } from 'lucide-react';
+import { User, GraduationCap, MapPin, CheckCircle2, Save, Send, FileText } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { FACULTIES } from '../constants/programs';
 
@@ -28,14 +28,22 @@ export default function Registration() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [appStatus, setAppStatus] = useState<ApplicationStatus>('draft');
   const [appId, setAppId] = useState<string | null>(null);
+  const [docs, setDocs] = useState<RegistrationDocument[]>([]);
+  const [docsLoading, setDocsLoading] = useState(true);
   const selectedFaculty = FACULTIES.find(f => f.id === formData.program);
 
   useEffect(() => {
     const fetchExistingData = async () => {
       try {
-        const response = await dataApi.getMyApplications();
-        if (response.data.length > 0) {
-          const app = response.data[0];
+        const [appRes, docRes] = await Promise.all([
+          dataApi.getMyApplications(),
+          dataApi.getMyDocuments()
+        ]);
+        
+        setDocs(docRes.data);
+        
+        if (appRes.data.length > 0) {
+          const app = appRes.data[0];
           setFormData(prev => ({ ...prev, ...app }));
           setAppStatus(app.status);
           setAppId(app.id);
@@ -49,6 +57,7 @@ export default function Registration() {
         console.error("Fetch application error:", error);
       } finally {
         setLoading(false);
+        setDocsLoading(false);
       }
     };
 
@@ -63,20 +72,20 @@ export default function Registration() {
       if (appId) {
         await dataApi.updateApplication(appId, {
           ...formData,
-          status: isSubmit ? 'submitted' : 'draft',
+          status: isSubmit ? 'verifying' : 'draft',
         });
       } else {
         const res = await dataApi.createApplication({
           ...formData,
-          status: isSubmit ? 'submitted' : 'draft',
+          status: isSubmit ? 'verifying' : 'draft',
         });
         setAppId(res.data.id);
       }
 
       if (isSubmit) {
-        alert(`Pendaftaran Anda berhasil dikirimkan. Silakan cek status Anda di Dashboard.`);
-        setStep(4);
-        setAppStatus('submitted');
+        alert(`Pendaftaran Anda berhasil dikirimkan. Anda akan diarahkan ke halaman pembayaran.`);
+        setAppStatus('verifying');
+        window.location.href = '/payment';
       } else {
         alert('Progress berhasil disimpan.');
       }
@@ -88,7 +97,8 @@ export default function Registration() {
     }
   };
 
-  const isReadOnly = appStatus !== 'draft' && appStatus !== 'submitted' && step !== 4;
+  const isReadOnly = appStatus !== 'draft' && step !== 4;
+  const isDocsComplete = docs.length >= 4;
 
   const validateStep = (s: number) => {
     const newErrors: Record<string, string> = {};
@@ -107,25 +117,70 @@ export default function Registration() {
     { label: 'Konfirmasi', icon: <CheckCircle2 size={20} /> },
   ];
 
-  if (loading) return null;
+  if (loading || docsLoading) return (
+    <div className="flex flex-col items-center justify-center p-20 gap-4">
+      <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-slate-500 dark:text-slate-400 font-bold animate-pulse uppercase tracking-[0.2em] text-xs">Initializing Secure Portal...</p>
+    </div>
+  );
+
+  if (!isDocsComplete && appStatus === 'draft') {
+    return (
+      <div className="max-w-xl mx-auto mt-12 p-10 bg-white dark:bg-[#151921] rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl text-center">
+        <div className="w-20 h-20 bg-rose-50 dark:bg-rose-900/20 rounded-3xl flex items-center justify-center text-rose-500 dark:text-rose-400 mx-auto mb-6 shadow-lg shadow-rose-100 dark:shadow-none">
+           <FileText size={40} />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">Lengkapi Dokumen</h2>
+        <p className="text-slate-500 dark:text-slate-400 font-medium mb-8 leading-relaxed">
+          Maaf, Anda harus mengunggah semua dokumen persyaratan (Ijazah, KK, Pas Foto, KTP) sebelum dapat melanjutkan ke proses pendaftaran.
+        </p>
+        <button 
+          onClick={() => window.location.href = '/documents'}
+          className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs tracking-widest uppercase hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 dark:shadow-none"
+        >
+          Unggah Dokumen Sekarang
+        </button>
+      </div>
+    );
+  }
+
+  if (appStatus !== 'draft' && step !== 4) {
+    return (
+      <div className="max-w-xl mx-auto mt-12 p-10 bg-white dark:bg-[#151921] rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl text-center transition-colors">
+        <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 rounded-3xl flex items-center justify-center text-emerald-500 dark:text-emerald-400 mx-auto mb-6 shadow-lg shadow-emerald-100 dark:shadow-none">
+           <CheckCircle2 size={40} />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">Pendaftaran Selesai</h2>
+        <p className="text-slate-500 dark:text-slate-400 font-medium mb-8 leading-relaxed">
+          Anda sudah melakukan pendaftaran. Silakan pantau status pendaftaran Anda melalui halaman Dashboard.
+        </p>
+        <button 
+          onClick={() => window.location.href = '/'}
+          className="w-full py-4 bg-slate-900 dark:bg-blue-600 text-white rounded-2xl font-black text-xs tracking-widest uppercase hover:bg-slate-800 dark:hover:bg-blue-700 transition-all shadow-xl shadow-slate-200 dark:shadow-none"
+        >
+          Kembali ke Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto w-full">
       {/* Stepper */}
-      <div className="flex justify-between items-center mb-8 px-2 md:px-4">
+      <div className="flex justify-between items-center mb-10 px-2 md:px-4 max-w-2xl mx-auto">
         {steps.map((s, i) => (
           <div key={i} className="flex-1 flex flex-col items-center relative">
             {i !== 0 && (
               <div className={cn(
                 "absolute top-4 md:top-5 -left-1/2 right-1/2 h-[2px] transition-colors duration-500",
-                step > i ? "bg-blue-600" : "bg-slate-200"
+                step > i ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-800"
               )}></div>
             )}
             <div className={cn(
               "w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center z-10 transition-all duration-300",
               step > i ? "bg-blue-600 text-white" : 
-              step === i + 1 ? "bg-white border-2 border-blue-600 text-blue-600 shadow-lg shadow-blue-50" : 
-              "bg-slate-100 text-slate-400"
+              step === i + 1 ? "bg-white dark:bg-slate-900 border-2 border-blue-600 text-blue-600 shadow-lg shadow-blue-50 dark:shadow-none" : 
+              "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600"
             )}>
               <div className="scale-75 md:scale-100">
                 {s.icon}
@@ -133,7 +188,7 @@ export default function Registration() {
             </div>
             <span className={cn(
               "text-[8px] md:text-[10px] uppercase font-bold mt-2 tracking-wider text-center px-1",
-              step === i + 1 ? "text-blue-600" : "text-slate-400"
+              step === i + 1 ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-600"
             )}>
               {s.label}
             </span>
@@ -144,29 +199,29 @@ export default function Registration() {
       <AnimatePresence mode="wait">
         <motion.div
           key={step}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="bg-white dark:bg-[#151921] rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden transition-colors"
         >
-          <div className="p-6 md:p-8">
+          <div className="p-6 md:p-10">
             {step === 1 && (
               <div className="space-y-6">
                 {isReadOnly && (
-                  <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center gap-3 text-yellow-800 text-[10px] md:text-xs font-medium">
+                  <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl flex items-center gap-3 text-amber-800 dark:text-amber-400 text-[10px] md:text-xs font-bold uppercase tracking-tight">
                     <Save size={16} /> Data terkunci karena sedang dalam proses verifikasi.
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nama Lengkap sesuai Ijazah</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Nama Lengkap sesuai Ijazah</label>
                     <input 
                       type="text" 
                       value={formData.fullName}
                       disabled={isReadOnly}
                       onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                       className={cn(
-                        "w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 outline-none transition-all",
+                        "w-full px-5 py-4 rounded-2xl border dark:bg-slate-800/50 dark:text-white dark:border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600 font-medium",
                         errors.fullName ? "border-red-500 bg-red-50" : "border-slate-200",
                         isReadOnly && "bg-slate-50 opacity-70"
                       )}
@@ -175,14 +230,14 @@ export default function Registration() {
                     {errors.fullName && <p className="text-[10px] text-red-500 font-bold">{errors.fullName}</p>}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tempat Lahir</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tempat Lahir</label>
                     <input 
                       type="text" 
                       value={formData.birthPlace}
                       disabled={isReadOnly}
                       onChange={(e) => setFormData({ ...formData, birthPlace: e.target.value })}
                       className={cn(
-                        "w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 outline-none transition-all",
+                        "w-full px-5 py-4 rounded-2xl border dark:bg-slate-800/50 dark:text-white dark:border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600 font-medium",
                         errors.birthPlace ? "border-red-500 bg-red-50" : "border-slate-200",
                         isReadOnly && "bg-slate-50 opacity-70"
                       )}
@@ -191,21 +246,23 @@ export default function Registration() {
                     {errors.birthPlace && <p className="text-[10px] text-red-500 font-bold">{errors.birthPlace}</p>}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tanggal Lahir</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tanggal Lahir</label>
                     <input 
                       type="date" 
                       value={formData.birthDate}
                       onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full px-5 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Jenis Kelamin</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Jenis Kelamin</label>
                     <div className="flex gap-4">
                       {['Laki-laki', 'Perempuan'].map(g => (
                         <label key={g} className={cn(
-                          "flex-1 py-3 px-4 rounded-xl border cursor-pointer text-center transition-all",
-                          formData.gender === g ? "bg-blue-50 border-blue-600 text-blue-700" : "bg-slate-50 border-slate-200 text-slate-600"
+                          "flex-1 py-4 px-4 rounded-2xl border cursor-pointer text-center transition-all font-bold text-xs uppercase tracking-widest",
+                          formData.gender === g 
+                            ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20" 
+                            : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-300"
                         )}>
                           <input 
                             type="radio" 
@@ -225,85 +282,89 @@ export default function Registration() {
             )}
 
             {step === 2 && (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Alamat Lengkap</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Alamat Lengkap (KTP)</label>
                   <textarea 
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[120px]"
-                    placeholder="Nama jalan, RT/RW, Kelurahan, Kecamatan..."
+                    className="w-full px-5 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[140px] placeholder:text-slate-300 dark:placeholder:text-slate-600 font-medium"
+                    placeholder="Nama jalan, RT/RW, Kelurahan, Kecamatan, Kota/Kabupaten..."
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nomor WhatsApp Aktif</label>
-                  <input 
-                    type="tel" 
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                    placeholder="Contoh: 081234567890"
-                  />
-                  <p className="text-[10px] text-slate-400">Penting: Informasi seleksi akan dikirimkan melalui nomor ini.</p>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Nomor WhatsApp Aktif</label>
+                  <div className="relative">
+                    <input 
+                      type="tel" 
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full pl-12 pr-5 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                      placeholder="81234567890"
+                    />
+                    <div className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-slate-400 border-r border-slate-200 dark:border-slate-700 pr-3">+62</div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium italic mt-2">*Mohon pastikan nomor ini aktif untuk koordinasi seleksi via WhatsApp.</p>
                 </div>
               </div>
             )}
 
             {step === 3 && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Sekolah Asal (SMA/SMK/MA)</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Sekolah Asal (SMA/SMK/MA/Pesantren)</label>
                     <input 
                       type="text" 
                       value={formData.previousSchool}
                       onChange={(e) => setFormData({ ...formData, previousSchool: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      placeholder="Nama sekolah asal..."
+                      className="w-full px-5 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600 font-medium"
+                      placeholder="Nama instansi pendidikan asal..."
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tahun Lulus</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tahun Kelulusan</label>
                     <select 
                       value={formData.gradYear}
                       onChange={(e) => setFormData({ ...formData, gradYear: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
+                      className="w-full px-5 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium appearance-none"
                     >
                       <option value="">Pilih Tahun</option>
-                      {[2024, 2023, 2022, 2021, 2020].map(y => <option key={y} value={y}>{y}</option>)}
+                      {[2024, 2023, 2022, 2021, 2020, 2019, 2018].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
                 </div>
 
-                <div className="bg-blue-900 rounded-xl p-6 text-white shadow-xl">
-                  <h3 className="font-bold flex items-center gap-2 mb-4">
-                    <CheckCircle2 size={18} /> Pilihan Program Studi
+                <div className="bg-blue-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:scale-110 transition-transform duration-700"></div>
+                  <h3 className="font-black text-xs uppercase tracking-[0.2em] flex items-center gap-2 mb-6 relative z-10 text-blue-200">
+                    <CheckCircle2 size={16} /> Pemilihan Program Studi
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2 text-blue-900">
-                      <label className="text-[10px] font-bold text-blue-200 uppercase tracking-widest">Fakultas</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-blue-300/60 uppercase tracking-widest">Fakultas Utama</label>
                       <select 
                         value={formData.program}
                         onChange={(e) => setFormData({ ...formData, program: e.target.value, major: '' })}
-                        className="w-full px-4 py-3 rounded-lg border-none focus:ring-2 focus:ring-white outline-none transition-all bg-white"
+                        className="w-full px-5 py-4 rounded-2xl border-none focus:ring-2 focus:ring-white outline-none transition-all bg-white/10 backdrop-blur-md text-white font-bold"
                       >
-                        <option value="">Pilih Fakultas</option>
+                        <option value="" className="text-slate-900">Pilih Fakultas</option>
                         {FACULTIES.map((faculty) => (
-                          <option key={faculty.id} value={faculty.id}>{faculty.name}</option>
+                          <option key={faculty.id} value={faculty.id} className="text-slate-900">{faculty.name}</option>
                         ))}
                       </select>
                     </div>
-                    <div className="space-y-2 text-blue-900">
-                      <label className="text-[10px] font-bold text-blue-200 uppercase tracking-widest">Program Studi</label>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-blue-300/60 uppercase tracking-widest">Program Studi Tujuan</label>
                       <select 
                         value={formData.major}
                         onChange={(e) => setFormData({ ...formData, major: e.target.value })}
-                        className="w-full px-4 py-3 rounded-lg border-none focus:ring-2 focus:ring-white outline-none transition-all bg-white disabled:bg-blue-800/50"
+                        className="w-full px-5 py-4 rounded-2xl border-none focus:ring-2 focus:ring-white outline-none transition-all bg-white/10 backdrop-blur-md text-white font-bold disabled:opacity-30 disabled:cursor-not-allowed"
                         disabled={!formData.program}
                       >
-                        <option value="">Pilih Prodi</option>
+                        <option value="" className="text-slate-900">Pilih Prodi</option>
                         {selectedFaculty?.programs.map(p => (
-                          <option key={p.id} value={p.name}>{p.name}</option>
+                          <option key={p.id} value={p.name} className="text-slate-900">{p.name}</option>
                         ))}
                       </select>
                     </div>
@@ -313,64 +374,67 @@ export default function Registration() {
             )}
 
             {step === 4 && (
-              <div className="py-12 flex flex-col items-center text-center space-y-6">
-                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-4 animate-bounce">
-                  <CheckCircle2 size={48} />
+              <div className="py-8 flex flex-col items-center text-center space-y-8">
+                <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-[2rem] flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-2 shadow-inner">
+                  <CheckCircle2 size={56} className="animate-float" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-800">Verifikasi Data Registrasi</h3>
-                <p className="max-w-md text-slate-500">
-                  Data Anda telah kami simpan. Silakan periksa kembali semua rincian sebelum mengirim file bukti untuk finalisasi.
-                </p>
-                <div className="w-full bg-slate-50 rounded-xl p-6 text-left space-y-4">
-                  <div className="flex justify-between border-b border-white pb-2">
-                    <span className="text-slate-400 text-xs">Pilihan Utama</span>
-                    <span className="font-bold text-slate-800">{formData.major}</span>
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Konfirmasi Pendaftaran</h3>
+                  <p className="max-w-md text-slate-500 dark:text-slate-400 font-medium">
+                    Mohon teliti kembali data Anda. Data yang sudah diajukan tidak dapat diubah tanpa persetujuan admin.
+                  </p>
+                </div>
+                
+                <div className="w-full max-w-2xl bg-slate-50 dark:bg-slate-800/40 rounded-[2rem] p-8 text-left space-y-5 border border-slate-100 dark:border-slate-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3 gap-1">
+                    <span className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">Pilihan Utama</span>
+                    <span className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{formData.major}</span>
                   </div>
-                  <div className="flex justify-between border-b border-white pb-2">
-                    <span className="text-slate-400 text-xs">Fakultas</span>
-                    <span className="font-bold text-slate-800">{selectedFaculty?.name}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3 gap-1">
+                    <span className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">Fakultas</span>
+                    <span className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{selectedFaculty?.name}</span>
                   </div>
-                  <div className="flex justify-between border-b border-white pb-2">
-                    <span className="text-slate-400 text-xs">Asal Sekolah</span>
-                    <span className="font-bold text-slate-800">{formData.previousSchool} ({formData.gradYear})</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3 gap-1">
+                    <span className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">Asal Sekolah</span>
+                    <span className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{formData.previousSchool} ({formData.gradYear})</span>
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="px-4 md:px-8 py-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between gap-4">
-            <div className="flex gap-2 w-full sm:w-auto">
+          <div className="px-6 md:px-10 py-6 bg-slate-50 dark:bg-[#1A1F29] border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between gap-4 transition-colors">
+            <div className="flex gap-2">
               {step > 1 && step < 4 && (
                 <button 
                   onClick={() => setStep(step - 1)}
-                  className="flex-1 sm:flex-none px-4 md:px-6 py-2.5 md:py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors text-xs md:text-sm border border-transparent"
+                  className="flex-1 sm:flex-none px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-700"
                 >
                   Kembali
                 </button>
               )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto ml-auto">
+            <div className="flex flex-col sm:flex-row gap-3 ml-auto w-full sm:w-auto">
               {step < 4 && (
                 <button 
                   onClick={() => handleSave(false)}
                   disabled={saving}
-                  className="w-full sm:w-auto px-4 md:px-6 py-2.5 md:py-2 flex items-center justify-center gap-2 rounded-xl font-bold text-blue-600 bg-white border border-blue-600 hover:bg-blue-50 transition-colors text-xs md:text-sm"
+                  className="flex-1 sm:flex-none px-6 py-3 flex items-center justify-center gap-2 rounded-2xl font-black uppercase text-[10px] tracking-widest text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 border border-blue-600 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 transition-all active:scale-95"
                 >
-                  <Save size={18} /> {saving ? 'Menyimpan...' : 'Simpan Draft'}
+                  <Save size={16} /> {saving ? 'Saving...' : 'Draft'}
                 </button>
               )}
               {step < 3 ? (
                 <button 
                   onClick={() => setStep(step + 1)}
-                  className="w-full sm:w-auto px-6 md:px-8 py-2.5 md:py-2 bg-blue-900 text-white rounded-xl font-bold hover:bg-blue-800 shadow-lg shadow-blue-100 transition-all active:scale-95 text-xs md:text-sm"
+                  className="flex-1 sm:flex-none px-10 py-3 bg-blue-900 dark:bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-800 dark:hover:bg-blue-500 shadow-xl shadow-blue-900/20 transition-all active:scale-95"
                 >
                   Lanjut
                 </button>
               ) : step === 3 ? (
                 <button 
                   onClick={() => setStep(step + 1)}
-                  className="w-full sm:w-auto px-6 md:px-8 py-2.5 md:py-2 bg-blue-900 text-white rounded-xl font-bold hover:bg-blue-800 shadow-lg shadow-blue-100 transition-all text-xs md:text-sm"
+                  className="flex-1 sm:flex-none px-10 py-3 bg-blue-900 dark:bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-800 dark:hover:bg-blue-500 shadow-xl shadow-blue-900/20 transition-all active:scale-95"
                 >
                   Review
                 </button>
@@ -378,9 +442,9 @@ export default function Registration() {
                 <button 
                   onClick={() => handleSave(true)}
                   disabled={saving}
-                  className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-100 flex items-center justify-center gap-2 transition-all text-xs md:text-sm"
+                  className="w-full sm:w-auto px-10 py-4 bg-green-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-green-700 shadow-xl shadow-green-900/20 flex items-center justify-center gap-3 transition-all active:scale-95"
                 >
-                  <Send size={18} /> Finalisasi & Ajukan
+                  <Send size={20} /> Kirim Sekarang
                 </button>
               ) : null}
             </div>

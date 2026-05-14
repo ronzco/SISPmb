@@ -7,6 +7,12 @@ import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();
 
+// Debug middleware
+router.use((req, res, next) => {
+  console.log(`[DATA-ROUTE] ${req.method} ${req.path}`);
+  next();
+});
+
 // Announcements (Public)
 router.get("/announcements", async (req, res) => {
   try {
@@ -62,7 +68,6 @@ router.patch("/applications/:id", authenticate, async (req: AuthRequest, res) =>
     const db = await getDb();
     const { fullName, birthPlace, birthDate, gender, address, phone, previousSchool, gradYear, program, major, status, email } = req.body;
     
-    // Build update object only with allowed fields
     const updateData: any = { updatedAt: new Date() };
     if (fullName !== undefined) updateData.fullName = fullName;
     if (birthPlace !== undefined) updateData.birthPlace = birthPlace;
@@ -88,30 +93,22 @@ router.patch("/applications/:id", authenticate, async (req: AuthRequest, res) =>
   }
 });
 
-// Admin routes
-router.get("/admin/applications", authenticate, authorize(["superadmin", "committee_academic"]), async (req, res) => {
-  try {
-    const db = await getDb();
-    const result = await db.select().from(applications).orderBy(desc(applications.updatedAt));
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch applications" });
-  }
-});
-
 // Documents (Student)
 router.get("/documents/my", authenticate, async (req: AuthRequest, res) => {
   try {
+    console.log(`[DOCS] Fetching docs for user ${req.user!.id}`);
     const db = await getDb();
     const result = await db.select().from(documents).where(eq(documents.userId, req.user!.id));
     res.json(result);
   } catch (error) {
+    console.error("Fetch documents error:", error);
     res.status(500).json({ error: "Failed to fetch documents" });
   }
 });
 
 router.post("/documents", authenticate, async (req: AuthRequest, res) => {
   try {
+    console.log(`[DOCS] Uploading doc for user ${req.user!.id}`, req.body);
     const db = await getDb();
     const id = uuidv4();
     await db.insert(documents).values({
@@ -123,6 +120,7 @@ router.post("/documents", authenticate, async (req: AuthRequest, res) => {
     });
     res.json({ success: true, id });
   } catch (error) {
+    console.error("Upload document error:", error);
     res.status(500).json({ error: "Failed to upload document" });
   }
 });
@@ -150,6 +148,7 @@ router.get("/payments/my", authenticate, async (req: AuthRequest, res) => {
 
 router.post("/payments", authenticate, async (req: AuthRequest, res) => {
   try {
+    console.log(`[PAYMENT] Creating payment for user ${req.user!.id}`, req.body);
     const db = await getDb();
     const id = uuidv4();
     await db.insert(payments).values({
@@ -158,11 +157,10 @@ router.post("/payments", authenticate, async (req: AuthRequest, res) => {
       amount: req.body.amount,
       method: req.body.method,
       status: req.body.status || "pending",
-      transactionId: req.body.transactionId,
-      paidAt: req.body.paidAt ? new Date(req.body.paidAt) : undefined,
+      transactionId: req.body.transactionId || `TRX-${Date.now()}`,
+      paidAt: req.body.paidAt ? new Date(req.body.paidAt) : new Date(),
     });
 
-    // If payment is success, update application status
     if (req.body.status === "success") {
       await db.update(applications)
         .set({ status: "verifying", updatedAt: new Date() })
@@ -173,6 +171,17 @@ router.post("/payments", authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error("Payment error:", error);
     res.status(500).json({ error: "Failed to process payment" });
+  }
+});
+
+// Admin routes
+router.get("/admin/applications", authenticate, authorize(["superadmin", "committee_academic"]), async (req, res) => {
+  try {
+    const db = await getDb();
+    const result = await db.select().from(applications).orderBy(desc(applications.updatedAt));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch applications" });
   }
 });
 

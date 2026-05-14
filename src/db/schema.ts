@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, text, timestamp, boolean, int, decimal } from "drizzle-orm/mysql-core";
+import { mysqlTable, varchar, text, timestamp, boolean, int, decimal, primaryKey } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 255 }).primaryKey(),
@@ -28,6 +28,7 @@ export const applications = mysqlTable("applications", {
   gradYear: varchar("grad_year", { length: 10 }),
   major: varchar("major", { length: 255 }),
   participantNumber: varchar("participant_number", { length: 50 }),
+  selectionCode: varchar("selection_code", { length: 100 }),
   score: int("score"),
   reRegistrationPaid: boolean("re_registration_paid").default(false),
 });
@@ -67,9 +68,11 @@ export const feeConfigs = mysqlTable("fee_configs", {
 });
 
 export const activityLogs = mysqlTable("activity_logs", {
-  id: varchar("id", { length: 255 }).primaryKey(),
+  id: varchar("id", { length: 255 }).notNull(),
   userId: varchar("user_id", { length: 255 }),
   action: varchar("action", { length: 100 }).notNull(),
   details: text("details").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
-});
+}, (table) => ({
+  pk: primaryKey({ columns: [table.id] }),
+}));
