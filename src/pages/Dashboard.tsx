@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [fees, setFees] = useState<FeeConfig[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [fetchError, setFetchError] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -36,14 +36,15 @@ export default function Dashboard() {
         setFees(feeRes.data);
         setDocs(docRes.data);
         setPayment(payRes.data);
-        setFetchError(false);
+        setFetchError(null);
         
         if (appRes.data.length > 0) {
           setApplication(appRes.data[0]);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Dashboard fetch error:", error);
-        setFetchError(true);
+        const serverMessage = error.response?.data?.message || error.message;
+        setFetchError(serverMessage);
       } finally {
         setLoading(false);
       }
@@ -82,6 +83,17 @@ export default function Dashboard() {
     if (index === 5) return ['accepted', 'rejected'].includes(application.status) ? 'completed' : 'pending';
     return 'pending';
   };
+
+  if (fetchError) return (
+    <div className="max-w-xl mx-auto mt-12 p-10 bg-white dark:bg-[#151921] rounded-[2.5rem] border border-red-200 dark:border-red-900/30 text-center">
+      <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <Bell size={32} />
+      </div>
+      <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Sync Error</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6">Gagal sinkronisasi data: {fetchError}. Pastikan database MySQL aktif.</p>
+      <button onClick={() => window.location.reload()} className="px-8 py-3 bg-red-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest">Retry Connection</button>
+    </div>
+  );
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-20 gap-4">

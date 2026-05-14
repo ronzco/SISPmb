@@ -58,7 +58,8 @@ export default function Registration() {
         }
       } catch (error: any) {
         console.error("Fetch application error:", error);
-        setFetchError("Gagal mengambil data dari server. Pastikan database MySQL XAMPP Anda aktif dan tabel sudah dibuat.");
+        const serverMessage = error.response?.data?.message || error.message;
+        setFetchError(`Gagal mengambil data dari server: ${serverMessage}. Pastikan database MySQL XAMPP Anda aktif dan tabel sudah dibuat.`);
       } finally {
         setLoading(false);
         setDocsLoading(false);

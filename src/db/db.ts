@@ -26,6 +26,133 @@ export async function getDb() {
       port,
       connectTimeout: 2000, 
     });
+
+    // Auto-migration for MySQL
+    try {
+      console.log("🛠️ Memeriksa struktur database MySQL...");
+      
+      // Ensure tables exist
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(255) PRIMARY KEY,
+          full_name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          password VARCHAR(255) NOT NULL,
+          phone VARCHAR(50),
+          role VARCHAR(50) NOT NULL DEFAULT 'applicant',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS applications (
+          id VARCHAR(255) PRIMARY KEY,
+          user_id VARCHAR(255) NOT NULL,
+          full_name VARCHAR(255) NOT NULL,
+          email VARCHAR(255),
+          program VARCHAR(255) NOT NULL,
+          major VARCHAR(255),
+          status VARCHAR(50) NOT NULL DEFAULT 'draft',
+          birth_place VARCHAR(255),
+          birth_date VARCHAR(50),
+          gender VARCHAR(50),
+          address TEXT,
+          phone VARCHAR(50),
+          previous_school VARCHAR(255),
+          grad_year VARCHAR(10),
+          participant_number VARCHAR(50),
+          selection_code VARCHAR(100),
+          score INT,
+          re_registration_paid TINYINT(1) DEFAULT 0,
+          submitted_at TIMESTAMP NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS documents (
+          id VARCHAR(255) PRIMARY KEY,
+          user_id VARCHAR(255) NOT NULL,
+          type VARCHAR(100) NOT NULL,
+          url TEXT NOT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'pending',
+          uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id VARCHAR(255) PRIMARY KEY,
+          user_id VARCHAR(255) NOT NULL,
+          amount DECIMAL(15,2) NOT NULL,
+          method VARCHAR(100) NOT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'pending',
+          transaction_id VARCHAR(255) NOT NULL,
+          paid_at TIMESTAMP NULL
+        )
+      `);
+
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS announcements (
+          id VARCHAR(255) PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          content TEXT NOT NULL,
+          type VARCHAR(50) NOT NULL DEFAULT 'info',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS fee_configs (
+          id VARCHAR(255) PRIMARY KEY,
+          description VARCHAR(255) NOT NULL,
+          amount DECIMAL(15,2) NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Sync columns for applications (Robust Migration)
+      const [rows]: any = await connection.execute("SHOW COLUMNS FROM applications");
+      const columns = rows.map((r: any) => r.Field);
+      
+      const missingCols = [
+        { name: 'selection_code', type: 'VARCHAR(100)' },
+        { name: 'participant_number', type: 'VARCHAR(50)' },
+        { name: 'email', type: 'VARCHAR(255)' },
+        { name: 'score', type: 'INT' },
+        { name: 're_registration_paid', type: 'TINYINT(1) DEFAULT 0' },
+        { name: 'birth_place', type: 'VARCHAR(255)' },
+        { name: 'birth_date', type: 'VARCHAR(50)' },
+        { name: 'gender', type: 'VARCHAR(50)' },
+        { name: 'address', type: 'TEXT' },
+        { name: 'phone', type: 'VARCHAR(50)' },
+        { name: 'previous_school', type: 'VARCHAR(255)' },
+        { name: 'grad_year', type: 'VARCHAR(10)' },
+        { name: 'major', type: 'VARCHAR(255)' },
+        { name: 'submitted_at', type: 'TIMESTAMP NULL' }
+      ];
+
+      for (const col of missingCols) {
+        if (!columns.includes(col.name)) {
+          try {
+            await connection.execute(`ALTER TABLE applications ADD COLUMN ${col.name} ${col.type}`);
+            console.log(`✅ Ditambahkan kolom '${col.name}' ke MySQL`);
+          } catch (e: any) {
+            console.warn(`⚠️ Gagal menambah kolom ${col.name}: ${e.message}`);
+          }
+        }
+      }
+
+      // Check if announcements table has type field
+      const [annRows]: any = await connection.execute("SHOW COLUMNS FROM announcements");
+      const annColumns = annRows.map((r: any) => r.Field);
+      if (!annColumns.includes('type')) {
+        await connection.execute("ALTER TABLE announcements ADD COLUMN type VARCHAR(50) DEFAULT 'info'");
+      }
+    } catch (migError) {
+      console.warn("⚠️ Gagal melakukan auto-migration MySQL:", migError.message);
+    }
+
     db = drizzleMysql(connection, { schema, mode: "default" });
     console.log("✅ Terhubung ke MySQL (XAMPP)");
     return db;

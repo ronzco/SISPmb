@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 export default function Documents() {
   const [docs, setDocs] = useState<RegistrationDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const documentTypes = [
     { id: 'ijazah', label: 'Ijazah / SKL SMA', description: 'File scan asli minimal resolusi 300dpi' },
@@ -24,9 +25,11 @@ export default function Documents() {
       const response = await dataApi.getMyDocuments();
       if (Array.isArray(response.data)) {
         setDocs(response.data);
+        setError(null);
       }
-    } catch (error) {
-      console.error('Failed to fetch documents:', error);
+    } catch (err: any) {
+      console.error('Failed to fetch documents:', err);
+      setError(err.response?.data?.message || err.message);
     } finally {
       setLoading(false);
     }
@@ -87,6 +90,15 @@ export default function Documents() {
       console.error('Delete failed:', error);
     }
   };
+
+  if (error) return (
+    <div className="max-w-xl mx-auto mt-12 p-10 bg-white dark:bg-[#151921] rounded-[2.5rem] border border-red-200 dark:border-red-900/30 text-center">
+      <X size={48} className="text-red-500 mx-auto mb-4" />
+      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Sync Error</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">Gagal mengambil data berkas: {error}</p>
+      <button onClick={() => window.location.reload()} className="px-8 py-3 bg-red-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest">Retry</button>
+    </div>
+  );
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-20 gap-4">
