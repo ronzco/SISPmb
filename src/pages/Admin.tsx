@@ -876,11 +876,11 @@ export default function AdminDashboard() {
       </AnimatePresence>
       {/* Details Modal Redesign */}
       {selectedApp && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-8 bg-slate-900/80 dark:bg-black/90 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-0 sm:p-4 md:p-8 bg-slate-900/90 backdrop-blur-md">
           <motion.div 
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="bg-white dark:bg-[#151921] rounded-[1.5rem] md:rounded-[2.5rem] shadow-2xl w-full max-w-6xl h-full max-h-[95vh] overflow-hidden flex flex-col border border-white/20 dark:border-slate-800"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white dark:bg-[#151921] sm:rounded-[2.5rem] shadow-2xl w-full max-w-6xl h-full sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col border-none sm:border border-white/20 dark:border-slate-800"
           >
             {/* Modal Header */}
             <div className="p-4 md:p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-900 dark:bg-black text-white shrink-0">
@@ -1070,16 +1070,14 @@ export default function AdminDashboard() {
                                              <input 
                                                type="number" 
                                                placeholder="Final Outcome Score (0-100)"
+                                               value={tempScore || ''}
                                                className="w-full pl-14 pr-4 py-4 bg-white dark:bg-slate-900 dark:text-white border border-blue-200 dark:border-blue-900/30 rounded-2xl font-black text-sm tracking-tight focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 transition-all outline-none"
-                                               onChange={(e) => {
-                                                 const score = parseInt(e.target.value);
-                                                 (window as any)._tempScore = score;
-                                               }}
+                                               onChange={(e) => setTempScore(parseInt(e.target.value))}
                                              />
                                           </div>
                                           <div className="flex gap-2">
                                              <button 
-                                                onClick={() => updateStatus('accepted', (window as any)._tempScore)}
+                                                onClick={() => updateStatus('accepted', tempScore)}
                                                 className="flex-1 md:flex-none px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-widest hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-100 dark:shadow-none uppercase"
                                              >
                                                 Accepted

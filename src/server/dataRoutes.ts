@@ -148,9 +148,9 @@ router.get("/payments/my", authenticate, async (req: AuthRequest, res) => {
   try {
     const db = await getDb();
     const result = await db.select().from(payments).where(eq(payments.userId, req.user!.id));
-    res.json(result[0] || null);
+    res.json(result); // Return the whole list instead of result[0]
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch payment" });
+    res.status(500).json({ error: "Failed to fetch payments" });
   }
 });
 
@@ -165,14 +165,21 @@ router.post("/payments", authenticate, async (req: AuthRequest, res) => {
       amount: req.body.amount,
       method: req.body.method,
       status: req.body.status || "pending",
+      category: req.body.category || "registration", // Handle category
       transactionId: req.body.transactionId || `TRX-${Date.now()}`,
       paidAt: req.body.paidAt ? new Date(req.body.paidAt) : new Date(),
     });
 
     if (req.body.status === "success") {
-      await db.update(applications)
-        .set({ status: "verifying", updatedAt: new Date() })
-        .where(eq(applications.userId, req.user!.id));
+      if (req.body.category === "tuition") {
+        await db.update(applications)
+          .set({ reRegistrationPaid: true, updatedAt: new Date() })
+          .where(eq(applications.userId, req.user!.id));
+      } else {
+        await db.update(applications)
+          .set({ status: "verifying", updatedAt: new Date() })
+          .where(eq(applications.userId, req.user!.id));
+      }
     }
 
     res.json({ success: true, id });

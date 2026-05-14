@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { dataApi } from '../lib/api';
 import { PaymentRecord, StudentApplication, FeeConfig } from '../types';
 import { motion } from 'motion/react';
@@ -6,17 +7,23 @@ import { CreditCard, CheckCircle2, Clock, AlertCircle, RefreshCw, Copy, External
 import { cn } from '../lib/utils';
 
 export default function Payment() {
-  const [payment, setPayment] = useState<PaymentRecord | null>(null);
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const paymentType = searchParams.get('type') || 'registration';
+
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [application, setApplication] = useState<StudentApplication | null>(null);
   const [fee, setFee] = useState<FeeConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMethod, setSelectedMethod] = useState<'VA' | 'QRIS' | 'EWALLET'>('VA');
 
-  const defaultAmount = 350000;
+  const defaultAmount = paymentType === 'tuition' ? 4500000 : 350000;
   const uniqueCode = 192; // Simulated unique code for identification
-  const amount = (fee?.amount || defaultAmount) + uniqueCode;
+  const amount = (fee?.amount ? Number(fee.amount) : defaultAmount) + uniqueCode;
   
   const vaNumber = `8812000${application?.userId?.substring(0, 5) || '12345'}`;
+
+  const currentPayment = payments.find(p => p.category === paymentType);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -30,23 +37,25 @@ export default function Payment() {
           userMajor = app.major || '';
         }
 
-        // Fetch payment
+        // Fetch payments
         const payRes = await dataApi.getMyPayment();
-        if (payRes.data && !payRes.data.error) {
-          setPayment(payRes.data);
-        } else {
-          setPayment(null);
+        if (payRes.data && Array.isArray(payRes.data)) {
+          setPayments(payRes.data);
         }
 
         // Fetch Fee Config
         const feesRes = await dataApi.getFees();
         const allFees = feesRes.data as FeeConfig[];
         
-        // Find fee that matches the major
-        const matchedFee = allFees.find(f => 
-          f.description.includes(userMajor) || 
-          (userMajor && f.id.includes(userMajor))
-        );
+        // Find fee that matches the major and paymentType
+        const matchedFee = allFees.find(f => {
+          const desc = f.description.toLowerCase();
+          if (paymentType === 'registration') {
+            return desc.includes('pendaftaran') || desc.includes('registrasi');
+          } else {
+            return userMajor && (desc.includes(userMajor.toLowerCase()) || f.id.toLowerCase().includes(userMajor.toLowerCase()));
+          }
+        });
         
         if (matchedFee) {
           setFee(matchedFee);
@@ -59,7 +68,7 @@ export default function Payment() {
     };
 
     fetchData();
-  }, []);
+  }, [paymentType]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-20 gap-4">
@@ -80,13 +89,15 @@ export default function Payment() {
       amount: amount,
       method: currentMethod,
       status: 'success',
+      category: paymentType,
       transactionId: `TXN-${Math.random().toString(36).substring(7).toUpperCase()}`,
       paidAt: Date.now(),
     };
 
     try {
       const response = await dataApi.createPayment(payData);
-      setPayment({ id: response.data.id, ...payData, userId: '' } as PaymentRecord);
+      const newPayment = { id: response.data.id, ...payData, userId: '' } as PaymentRecord;
+      setPayments([...payments.filter(p => p.category !== paymentType), newPayment]);
       alert('Pembayaran berhasil dikonfirmasi secara otomatis.');
     } catch (error) {
       console.error('Payment failed:', error);
@@ -103,8 +114,14 @@ export default function Payment() {
       <div className="bg-white dark:bg-[#151921] rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm flex flex-col md:flex-row gap-8 items-center md:items-start transition-colors">
         <div className="w-full md:flex-1 space-y-6">
           <div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Status Pembayaran</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium italic">Biaya Pendaftaran Mahasiswa Baru 2024/2025.</p>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+              {paymentType === 'tuition' ? 'Pembayaran Biaya Kuliah (UKT)' : 'Status Pembayaran Pendaftaran'}
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium italic">
+              {paymentType === 'tuition' 
+                ? `Pembayaran Semester 1 - Program Studi ${application?.major || 'Pilihan'}`
+                : 'Biaya Pendaftaran Mahasiswa Baru 2024/2025.'}
+            </p>
           </div>
 
           <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50 p-6 shadow-sm">
@@ -120,6 +137,7 @@ export default function Payment() {
                       ? "border-blue-600 bg-white dark:bg-slate-900 text-blue-600 shadow-lg scale-105" 
                       : "border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/50 text-slate-400 dark:text-slate-600 hover:border-slate-200 dark:hover:border-slate-700"
                   )}
+                  disabled={currentPayment?.status === 'success'}
                 >
                   <div className={cn(
                     "p-2 rounded-xl",
@@ -135,14 +153,14 @@ export default function Payment() {
 
           <div className="p-8 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] flex flex-col items-center text-center shadow-inner relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 dark:bg-blue-900/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-            {payment?.status === 'success' ? (
+            {currentPayment?.status === 'success' ? (
               <>
                 <div className="w-20 h-20 bg-green-50 dark:bg-green-900/20 rounded-[2rem] flex items-center justify-center text-green-600 dark:text-green-400 mb-6 shadow-lg shadow-green-100 dark:shadow-none">
                   <CheckCircle2 size={40} />
                 </div>
                 <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-widest">TRANSAKSI LUNAS</h3>
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 font-bold uppercase tracking-widest leading-loose">
-                  Terverifikasi otomatis pada {new Date(payment.paidAt!).toLocaleString('id-ID')}
+                  Terverifikasi otomatis pada {new Date(currentPayment.paidAt!).toLocaleString('id-ID')}
                 </p>
                 <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full">
                   <button className="flex-1 flex items-center justify-center gap-3 py-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95">
@@ -160,7 +178,7 @@ export default function Payment() {
                 </div>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-[0.2em]">Menunggu Pembayaran</h3>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-3 italic leading-relaxed max-w-sm">
-                  Mohon segera selesaikan pembayaran agar Admin dapat memverifikasi data pendaftaran Anda.
+                  Mohon segera selesaikan pembayaran agar Admin dapat memverifikasi {paymentType === 'tuition' ? 'registrasi ulang' : 'data pendaftaran'} Anda.
                 </p>
                 
                 <div className="mt-8 w-full space-y-4">
@@ -201,7 +219,7 @@ export default function Payment() {
                   
                   <div className="bg-slate-900 dark:bg-blue-900/40 p-6 rounded-2xl border border-slate-800 shadow-xl overflow-hidden relative">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-blue-300 opacity-60 uppercase tracking-[0.2em] text-left mb-2">Total Tagihan</p>
+                    <p className="text-[9px] font-black text-slate-400 dark:text-blue-300 opacity-60 uppercase tracking-[0.2em] text-left mb-2">Total Tagihan {paymentType === 'tuition' ? '(Semester 1)' : ''}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-3xl font-black text-white font-mono tracking-tighter">Rp {amount.toLocaleString('id-ID')}</span>
                       <div className="px-3 py-1 bg-white/10 dark:bg-blue-400/20 text-white dark:text-blue-300 text-[9px] font-black rounded-lg uppercase tracking-widest border border-white/10">Inkl. Kode Unik</div>
@@ -256,13 +274,13 @@ export default function Payment() {
               <h4 className="font-black text-xs text-slate-800 dark:text-slate-200 uppercase tracking-widest">Policy Note</h4>
             </div>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium italic">
-              Biaya pendaftaran yang telah dibayarkan bersifat <span className="font-black text-rose-600 dark:text-rose-400">NON-REFUNDABLE</span>. Harap teliti prodi Anda.
+              Biaya yang telah dibayarkan bersifat <span className="font-black text-rose-600 dark:text-rose-400">NON-REFUNDABLE</span>. Harap teliti prodi Anda.
             </p>
           </div>
         </div>
       </div>
       
-      {payment?.status === 'success' && (
+      {currentPayment?.status === 'success' && (
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -274,7 +292,10 @@ export default function Payment() {
           <div>
             <h4 className="font-black text-emerald-900 dark:text-emerald-400 uppercase tracking-widest text-xs">Verification Successful</h4>
             <p className="text-sm text-emerald-800 dark:text-emerald-500/80 mt-1 font-medium leading-relaxed">
-              Terima kasih! Pembayaran Anda telah diterima oleh Direktorat Keuangan. Silakan lanjutkan pelengkapan berkas di menu Berkas Persyaratan.
+              Terima kasih! Pembayaran Anda telah diterima oleh Direktorat Keuangan. 
+              {paymentType === 'registration' 
+                ? ' Silakan lanjutkan pelengkapan berkas di menu Berkas Persyaratan.'
+                : ' Berhasil melakukan Registrasi Ulang. Selamat bergabung di UNUTN!'}
             </p>
           </div>
         </motion.div>

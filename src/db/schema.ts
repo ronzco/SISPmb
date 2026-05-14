@@ -56,6 +56,7 @@ export const payments = mysqlTable("payments", {
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   method: varchar("method", { length: 100 }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
+  category: varchar("category", { length: 100 }).notNull().default("registration"), // Added category
   transactionId: varchar("transaction_id", { length: 255 }).notNull(),
   paidAt: timestamp("paid_at"),
 });

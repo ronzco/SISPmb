@@ -14,7 +14,7 @@ export default function Dashboard() {
   const { profile } = useOutletContext<{ profile: AuthUser }>();
   const [application, setApplication] = useState<StudentApplication | null>(null);
   const [docs, setDocs] = useState<RegistrationDocument[]>([]);
-  const [payment, setPayment] = useState<PaymentRecord | null>(null);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [fees, setFees] = useState<FeeConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,7 @@ export default function Dashboard() {
         setAnnouncements(annRes.data);
         setFees(feeRes.data);
         setDocs(docRes.data);
-        setPayment(payRes.data);
+        setPayments(Array.isArray(payRes.data) ? payRes.data : []);
         setFetchError(null);
         
         if (appRes.data.length > 0) {
@@ -66,7 +66,7 @@ export default function Dashboard() {
     if (!application) return index === 0 ? 'current' : 'pending';
     if (index === 0) return 'completed';
     const isDocsDone = docs.length >= 4;
-    const isPaid = payment?.status === 'success';
+    const isPaid = payments.some(p => (p.category === 'registration' || !p.category) && p.status === 'success');
 
     if (index === 1) return isDocsDone ? 'completed' : (isPaid ? 'current' : 'pending');
     if (index === 2) return isPaid ? 'completed' : 'current';
@@ -325,7 +325,7 @@ export default function Dashboard() {
                           className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-white text-blue-900 rounded-2xl text-[11px] font-black tracking-widest uppercase hover:bg-slate-50 transition-all shadow-xl active:scale-95 group/btn"
                         >
                           <Download size={18} className="group-hover/btn:translate-y-0.5 transition-transform" />
-                          Cetak Kartu Ujian
+                          Download Kartu Ujian
                         </button>
                       )}
                     </div>
@@ -377,7 +377,7 @@ export default function Dashboard() {
           </div>
           <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col justify-between">
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Status Pembayaran</p>
-            {payment?.status === 'success' ? (
+            {payments.some(p => (p.category === 'registration' || !p.category) && p.status === 'success') ? (
               <span className="text-[10px] font-black text-green-600 dark:text-green-400 flex items-center gap-1 uppercase">
                 <CheckCircle2 size={12} /> Payment Verified
               </span>
@@ -454,18 +454,18 @@ export default function Dashboard() {
                   </div>
                   <div className={cn(
                     "px-2 py-1 rounded text-[8px] font-black uppercase", 
-                    payment?.status === 'success' 
+                    payments.some(p => (p.category === 'registration' || !p.category) && p.status === 'success')
                       ? "bg-green-500/20 text-green-400 border border-green-500/50" 
                       : "bg-amber-500/20 text-amber-400 border border-amber-500/50"
                   )}>
-                    {payment?.status === 'success' ? 'LUNAS' : 'PENDING'}
+                    {payments.some(p => (p.category === 'registration' || !p.category) && p.status === 'success') ? 'LUNAS' : 'PENDING'}
                   </div>
                 </div>
                 <button 
                   onClick={() => window.location.href = '/payment'}
                   className="w-full py-4 bg-blue-600 dark:bg-white dark:text-blue-900 text-white rounded-xl text-[10px] font-black tracking-widest hover:bg-blue-700 dark:hover:bg-slate-50 transition-all relative z-10 shadow-lg"
                 >
-                  {payment?.status === 'success' ? 'RIWAYAT TRANSAKSI' : 'BAYAR SEKARANG'}
+                  {payments.some(p => (p.category === 'registration' || !p.category) && p.status === 'success') ? 'RIWAYAT TRANSAKSI' : 'BAYAR SEKARANG'}
                 </button>
               </div>
             </div>
@@ -516,9 +516,10 @@ export default function Dashboard() {
                  )}
                  <button 
                    onClick={() => window.location.href = '/payment?type=tuition'}
-                   className="w-full mt-4 py-4 bg-emerald-600 text-white border-none text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 dark:shadow-none flex items-center justify-center gap-2"
+                   className="w-full mt-4 py-4 bg-emerald-600 text-white border-none text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 dark:shadow-none flex items-center justify-center gap-2 disabled:bg-slate-400 disabled:shadow-none"
+                    disabled={application?.reRegistrationPaid}
                  >
-                   BAYAR BIAYA KULIAH <CreditCard size={14} />
+                   {application?.reRegistrationPaid ? 'SUDAH DIBAYAR' : 'BAYAR BIAYA KULIAH'} <CreditCard size={14} />
                  </button>
               </div>
            </div>

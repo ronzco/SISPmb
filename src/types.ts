@@ -57,6 +57,7 @@ export interface PaymentRecord {
   amount: number;
   method: string;
   status: 'pending' | 'success' | 'failed';
+  category?: string; // Added optional category
   transactionId: string;
   paidAt?: number;
 }
