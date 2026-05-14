@@ -20,6 +20,14 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Initial theme check
+    const isDark = localStorage.getItem('theme') === 'dark';
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
     const checkAuth = async () => {
       try {
         const response = await authApi.me();
@@ -36,10 +44,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+      <div className="h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-[#0B0E14] transition-colors duration-300">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-500 font-medium">Memuat portal PMB...</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium">Memuat portal PMB...</p>
         </div>
       </div>
     );
