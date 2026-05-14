@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { auth, db } from '../lib/firebase';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { dataApi } from '../lib/api';
 import { RegistrationDocument } from '../types';
 import { motion } from 'motion/react';
-import { Upload, File, CheckCircle, AlertCircle, X, ExternalLink, CloudUpload } from 'lucide-react';
+import { File, CheckCircle, X, ExternalLink, CloudUpload, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Documents() {
@@ -19,34 +18,29 @@ export default function Documents() {
 
   useEffect(() => {
     const fetchDocs = async () => {
-      if (!auth.currentUser) return;
-      const q = query(
-        collection(db, 'documents'),
-        where('userId', '==', auth.currentUser.uid)
-      );
-      const querySnapshot = await getDocs(q);
-      const fetchedDocs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RegistrationDocument));
-      setDocs(fetchedDocs);
-      setLoading(false);
+      try {
+        const response = await dataApi.getMyDocuments();
+        setDocs(response.data);
+      } catch (error) {
+        console.error('Failed to fetch documents:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchDocs();
   }, []);
 
   const handleUpload = async (typeId: string) => {
-    if (!auth.currentUser) return;
     // Simulating upload for this applet environment
-    const docData: Omit<RegistrationDocument, 'id'> = {
-      userId: auth.currentUser.uid,
+    const docData = {
       type: typeId,
       url: `https://picsum.photos/seed/${typeId}/800/600`, // Placeholder
-      status: 'pending',
-      uploadedAt: Date.now(),
     };
 
     try {
-      const docRef = await addDoc(collection(db, 'documents'), docData);
-      setDocs([...docs, { id: docRef.id, ...docData }]);
+      const response = await dataApi.uploadDocument(docData);
+      setDocs([...docs, { id: response.data.id, ...docData, status: 'pending', uploadedAt: Date.now(), userId: '' } as RegistrationDocument]);
     } catch (error) {
       console.error('Upload failed:', error);
       alert('Gagal mengunggah berkas.');
@@ -55,12 +49,19 @@ export default function Documents() {
 
   const handleDelete = async (docId: string) => {
     try {
-      await deleteDoc(doc(db, 'documents', docId));
+      await dataApi.deleteDocument(docId);
       setDocs(docs.filter(d => d.id !== docId));
     } catch (error) {
       console.error('Delete failed:', error);
     }
   };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center p-20 gap-4">
+      <Loader2 className="animate-spin text-blue-600" size={48} />
+      <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Loading Documents...</p>
+    </div>
+  );
 
   return (
     <motion.div 

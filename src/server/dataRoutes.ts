@@ -99,6 +99,83 @@ router.get("/admin/applications", authenticate, authorize(["superadmin", "commit
   }
 });
 
+// Documents (Student)
+router.get("/documents/my", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const db = await getDb();
+    const result = await db.select().from(documents).where(eq(documents.userId, req.user!.id));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch documents" });
+  }
+});
+
+router.post("/documents", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const db = await getDb();
+    const id = uuidv4();
+    await db.insert(documents).values({
+      id,
+      userId: req.user!.id,
+      type: req.body.type,
+      url: req.body.url,
+      status: "pending",
+    });
+    res.json({ success: true, id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to upload document" });
+  }
+});
+
+router.delete("/documents/:id", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const db = await getDb();
+    await db.delete(documents).where(eq(documents.id, req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete document" });
+  }
+});
+
+// Payments (Student)
+router.get("/payments/my", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const db = await getDb();
+    const result = await db.select().from(payments).where(eq(payments.userId, req.user!.id));
+    res.json(result[0] || null);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch payment" });
+  }
+});
+
+router.post("/payments", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const db = await getDb();
+    const id = uuidv4();
+    await db.insert(payments).values({
+      id,
+      userId: req.user!.id,
+      amount: req.body.amount,
+      method: req.body.method,
+      status: req.body.status || "pending",
+      transactionId: req.body.transactionId,
+      paidAt: req.body.paidAt ? new Date(req.body.paidAt) : undefined,
+    });
+
+    // If payment is success, update application status
+    if (req.body.status === "success") {
+      await db.update(applications)
+        .set({ status: "verifying", updatedAt: new Date() })
+        .where(eq(applications.userId, req.user!.id));
+    }
+
+    res.json({ success: true, id });
+  } catch (error) {
+    console.error("Payment error:", error);
+    res.status(500).json({ error: "Failed to process payment" });
+  }
+});
+
 // Fee Configs
 router.get("/fees", async (req, res) => {
   try {

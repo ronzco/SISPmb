@@ -25,6 +25,15 @@ export const dataApi = {
   updateApplication: (id: string, data: any) => api.patch(`/applications/${id}`, data),
   getFees: () => api.get("/fees"),
   
+  // Student Documents
+  getMyDocuments: () => api.get("/documents/my"),
+  uploadDocument: (data: any) => api.post("/documents", data),
+  deleteDocument: (id: string) => api.delete(`/documents/${id}`),
+
+  // Student Payments
+  getMyPayment: () => api.get("/payments/my"),
+  createPayment: (data: any) => api.post("/payments", data),
+  
   // Admin Content Management
   createAnnouncement: (data: any) => api.post("/admin/announcements", data),
   deleteAnnouncement: (id: string) => api.delete(`/admin/announcements/${id}`),

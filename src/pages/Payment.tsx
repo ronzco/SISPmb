@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { auth, db } from '../lib/firebase';
-import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
+import { dataApi } from '../lib/api';
 import { PaymentRecord, StudentApplication, FeeConfig } from '../types';
 import { motion } from 'motion/react';
 import { CreditCard, CheckCircle2, Clock, AlertCircle, RefreshCw, Copy, ExternalLink, Download, Loader2 } from 'lucide-react';
@@ -13,35 +12,33 @@ export default function Payment() {
   const [loading, setLoading] = useState(true);
   const [selectedMethod, setSelectedMethod] = useState<'VA' | 'QRIS' | 'EWALLET'>('VA');
 
-  const vaNumber = `8812000${auth.currentUser?.uid.substring(0, 5)}`;
   const defaultAmount = 350000;
   const uniqueCode = 192; // Simulated unique code for identification
   const amount = (fee?.amount || defaultAmount) + uniqueCode;
+  
+  const vaNumber = `8812000${application?.userId?.substring(0, 5) || '12345'}`;
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!auth.currentUser) return;
-      
       try {
         // Fetch current application to get major
-        const appSnap = await getDocs(query(collection(db, 'applications'), where('userId', '==', auth.currentUser.uid)));
+        const appRes = await dataApi.getMyApplications();
         let userMajor = '';
-        if (!appSnap.empty) {
-          const app = { id: appSnap.docs[0].id, ...appSnap.docs[0].data() } as StudentApplication;
+        if (appRes.data && appRes.data.length > 0) {
+          const app = appRes.data[0];
           setApplication(app);
           userMajor = app.major || '';
         }
 
         // Fetch payment
-        const paySnap = await getDocs(query(collection(db, 'payments'), where('userId', '==', auth.currentUser.uid)));
-        if (!paySnap.empty) {
-          setPayment({ id: paySnap.docs[0].id, ...paySnap.docs[0].data() } as PaymentRecord);
+        const payRes = await dataApi.getMyPayment();
+        if (payRes.data) {
+          setPayment(payRes.data);
         }
 
         // Fetch Fee Config
-        // First try to match by exact major name in description (since we stored name in major field)
-        const feesSnap = await getDocs(collection(db, 'fees_config'));
-        const allFees = feesSnap.docs.map(d => d.data() as FeeConfig);
+        const feesRes = await dataApi.getFees();
+        const allFees = feesRes.data as FeeConfig[];
         
         // Find fee that matches the major
         const matchedFee = allFees.find(f => 
@@ -76,12 +73,8 @@ export default function Payment() {
   ];
 
   const handleSimulatePayment = async (methodName?: string) => {
-    if (!auth.currentUser) return;
     const currentMethod = methodName || (selectedMethod === 'VA' ? 'BNI Virtual Account' : selectedMethod === 'QRIS' ? 'QRIS GPN' : 'E-Wallet');
-    const payId = `PAY-${Date.now()}`;
-    const payData: PaymentRecord = {
-      id: payId,
-      userId: auth.currentUser.uid,
+    const payData = {
       amount: amount,
       method: currentMethod,
       status: 'success',
@@ -90,26 +83,12 @@ export default function Payment() {
     };
 
     try {
-      await setDoc(doc(db, 'payments', payId), payData);
-      const appRef = doc(db, 'applications', auth.currentUser.uid);
-      await setDoc(appRef, { 
-        userId: auth.currentUser.uid, 
-        status: 'verifying', 
-        updatedAt: Date.now() 
-      }, { merge: true });
-      
-      // Activity Log
-      await setDoc(doc(collection(db, 'logs')), {
-        userId: auth.currentUser.uid,
-        action: 'PAYMENT_SUCCESS',
-        details: `Paid ${amount} using ${currentMethod}`,
-        timestamp: Date.now()
-      });
-
-      setPayment(payData);
+      const response = await dataApi.createPayment(payData);
+      setPayment({ id: response.data.id, ...payData, userId: '' } as PaymentRecord);
       alert('Pembayaran berhasil dikonfirmasi secara otomatis.');
     } catch (error) {
       console.error('Payment failed:', error);
+      alert('Gagal memproses pembayaran.');
     }
   };
 

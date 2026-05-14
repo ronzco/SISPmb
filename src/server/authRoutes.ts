@@ -22,6 +22,7 @@ router.post("/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = uuidv4();
+    const role = email.endsWith("@unutech.ac.id") ? "admin" : "applicant";
 
     await db.insert(users).values({
       id: userId,
@@ -29,10 +30,10 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       fullName,
       phone,
-      role: "applicant",
+      role,
     });
 
-    const token = jwt.sign({ id: userId, email, role: "applicant" }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ id: userId, email, role }, JWT_SECRET, { expiresIn: "7d" });
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -41,7 +42,7 @@ router.post("/register", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({ success: true, user: { id: userId, email, fullName, role: "applicant" } });
+    res.json({ success: true, user: { id: userId, email, fullName, role } });
   } catch (error) {
     console.error("Registration error:", error);
     res.status(500).json({ error: "Internal server error" });
