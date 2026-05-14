@@ -1,9 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from './lib/firebase';
-import { UserProfile } from './types';
+import { authApi } from './lib/api';
+import { AuthUser } from './types';
 
 // Components & Pages
 import Shell from './components/layout/Shell';
@@ -18,31 +16,22 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        // Fetch profile
-        const profileRef = doc(db, 'users', firebaseUser.uid);
-        const profileSnap = await getDoc(profileRef);
-        
-        if (profileSnap.exists()) {
-          setProfile(profileSnap.data() as UserProfile);
-        } else {
-          // No profile found - user might be in process of role selection or unauthorized
-          setProfile(null);
-        }
-      } else {
-        setProfile(null);
+    const checkAuth = async () => {
+      try {
+        const response = await authApi.me();
+        setUser(response.data.user);
+      } catch (error) {
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
+    checkAuth();
   }, []);
 
   if (loading) {
@@ -61,18 +50,18 @@ export default function App() {
       <Routes>
         <Route 
           path="/login" 
-          element={!(user && profile) ? <Login /> : <Navigate to="/" replace />} 
+          element={!user ? <Login /> : <Navigate to="/" replace />} 
         />
         <Route 
           path="/register" 
-          element={!(user && profile) ? <Register /> : <Navigate to="/" replace />} 
+          element={!user ? <Register /> : <Navigate to="/" replace />} 
         />
         
         <Route 
           path="/" 
-          element={user && profile ? <Shell user={user} profile={profile} /> : <Navigate to="/login" replace />}
+          element={user ? <Shell user={user} profile={user} /> : <Navigate to="/login" replace />}
         >
-          <Route index element={profile?.role === 'applicant' ? <Dashboard /> : <Navigate to="/admin" replace />} />
+          <Route index element={user?.role === 'applicant' ? <Dashboard /> : <Navigate to="/admin" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="registration" element={<Registration />} />
           <Route path="documents" element={<Documents />} />

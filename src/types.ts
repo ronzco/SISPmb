@@ -10,6 +10,13 @@ export interface UserProfile {
   createdAt: number;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+}
+
 export interface StudentApplication {
   id: string;
   userId: string;

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { db, auth } from '../lib/firebase';
-import { collection, query, getDocs, doc, setDoc, where, orderBy, limit } from 'firebase/firestore';
-import { StudentApplication, RegistrationDocument, PaymentRecord, ApplicationStatus, ActivityLog } from '../types';
+import { useSearchParams, useOutletContext } from 'react-router-dom';
+import { dataApi } from '../lib/api';
+import { StudentApplication, RegistrationDocument, PaymentRecord, ApplicationStatus, ActivityLog, AuthUser, Announcement, FeeConfig } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, CheckCircle, Clock, AlertCircle, Search, 
@@ -10,13 +9,10 @@ import {
   Megaphone, DollarSign, Plus, Trash2, Edit, Save, ShieldCheck, CreditCard, FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { handleFirestoreError, OperationType } from '../lib/fireErrorHandler';
-import { Announcement, FeeConfig } from '../types';
 import { FACULTIES, getProgramById } from '../constants/programs';
 
 export default function AdminDashboard() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminRole, setAdminRole] = useState<string | null>(null);
+  const { profile } = useOutletContext<{ profile: AuthUser }>();
   const [applications, setApplications] = useState<StudentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,73 +56,41 @@ export default function AdminDashboard() {
   const [newFee, setNewFee] = useState({ description: '', amount: 0, facultyId: '', programId: '' });
 
   useEffect(() => {
-    const checkAdmin = async () => {
-      if (!auth.currentUser) return;
-      const uid = auth.currentUser.uid;
-      const email = auth.currentUser.email;
-
-      try {
-        const { getDoc: fGetDoc } = await import('firebase/firestore');
-        const adminRef = doc(db, 'admins', uid);
-        const adminDoc = await fGetDoc(adminRef);
-
-        if (adminDoc.exists()) {
-          const data = adminDoc.data();
-          setAdminRole(data.role);
-          setIsAdmin(true);
-          fetchApplications();
-          fetchLogs();
-          fetchAnnouncements();
-          fetchFees();
-        } else if (email === 'ronikoswara795@gmail.com') {
-          // Bootstrap superadmin
-          await setDoc(adminRef, {
-            uid,
-            fullName: auth.currentUser.displayName || 'System Admin',
-            email,
-            role: 'superadmin'
-          });
-          // Also update user profile role
-          await setDoc(doc(db, 'users', uid), { role: 'superadmin' }, { merge: true });
-          
-          setAdminRole('superadmin');
-          setIsAdmin(true);
-          fetchApplications();
-          fetchLogs();
-          fetchAnnouncements();
-          fetchFees();
-        } else {
+    const initAdmin = async () => {
+      if (profile.role === 'admin' || profile.role === 'superadmin') {
+        try {
+          const tasks = [
+            fetchApplications(),
+            fetchAnnouncements(),
+            fetchFees()
+          ];
+          if (profile.role === 'superadmin') tasks.push(fetchLogs());
+          await Promise.all(tasks);
+        } catch (error) {
+          console.error("Admin init error:", error);
+        } finally {
           setLoading(false);
         }
-      } catch (error) {
-        console.error("Admin check error:", error);
+      } else {
         setLoading(false);
       }
     };
-
-    checkAdmin();
-  }, []);
+    initAdmin();
+  }, [profile]);
 
   const fetchAnnouncements = async () => {
-    const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement)));
+    const res = await dataApi.getAnnouncements();
+    setAnnouncements(res.data);
   };
 
   const fetchFees = async () => {
-    const q = query(collection(db, 'fees_config'), orderBy('updatedAt', 'desc'));
-    const snap = await getDocs(q);
-    setFees(snap.docs.map(d => ({ id: d.id, ...d.data() } as FeeConfig)));
+    const res = await dataApi.getFees();
+    setFees(res.data);
   };
 
   const handleAddAnnouncement = async () => {
     if (!newAnnouncement.title || !newAnnouncement.content) return;
-    const id = `ANN-${Date.now()}`;
-    await setDoc(doc(db, 'announcements', id), {
-      ...newAnnouncement,
-      id,
-      createdAt: Date.now()
-    });
+    await dataApi.createAnnouncement(newAnnouncement);
     setNewAnnouncement({ title: '', content: '', type: 'info' });
     fetchAnnouncements();
   };
@@ -134,7 +98,6 @@ export default function AdminDashboard() {
   const handleAddFee = async () => {
     if (!newFee.amount) return;
     
-    // Auto-generate description if not provided based on program/faculty
     let description = newFee.description;
     if (!description && newFee.programId) {
       const prog = getProgramById(newFee.programId);
@@ -145,161 +108,72 @@ export default function AdminDashboard() {
     }
 
     if (!description) description = "Biaya Lainnya";
-
-    const id = newFee.programId || newFee.facultyId || `FEE-${Date.now()}`;
     
-    await setDoc(doc(db, 'fees_config', id), {
-      description,
-      amount: newFee.amount,
-      facultyId: newFee.facultyId || null,
-      programId: newFee.programId || null,
-      id,
-      updatedAt: Date.now()
-    });
+    await dataApi.updateFee({ ...newFee, description });
     setNewFee({ description: '', amount: 0, facultyId: '', programId: '' });
     fetchFees();
   };
 
-  const deleteItem = async (collectionName: string, id: string) => {
+  const deleteItem = async (type: string, id: string) => {
     if (!confirm('Yakin ingin menghapus data ini?')) return;
-    const { deleteDoc, doc: fDoc } = await import('firebase/firestore');
-    await deleteDoc(fDoc(db, collectionName, id));
-    if (collectionName === 'announcements') fetchAnnouncements();
-    if (collectionName === 'fees_config') fetchFees();
-  };
-
-  const hasPermission = (action: 'view_logs' | 'manage_academic' | 'manage_finance' | 'export_report') => {
-    if (adminRole === 'superadmin') return true;
-    if (adminRole === 'committee_academic' && action === 'manage_academic') return true;
-    if (adminRole === 'committee_finance' && action === 'manage_finance') return true;
-    if (action === 'export_report' && (adminRole === 'superadmin' || adminRole === 'committee_academic')) return true;
-    return false;
-  };
-
-  const fetchLogs = async () => {
-    const q = query(collection(db, 'logs'), orderBy('timestamp', 'desc'), limit(50));
-    const snap = await getDocs(q);
-    setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog)));
+    if (type === 'announcements') {
+      await dataApi.deleteAnnouncement(id);
+      fetchAnnouncements();
+    } else if (type === 'fees_config') {
+      await dataApi.deleteFee(id);
+      fetchFees();
+    }
   };
 
   const fetchApplications = async () => {
     try {
-      setLoading(true);
-      const q = query(collection(db, 'applications'), orderBy('updatedAt', 'desc'));
-      const snap = await getDocs(q).catch(e => handleFirestoreError(e, OperationType.LIST, 'applications'));
-      
-      // Fetch all payments for summary
-      const paySnap = await getDocs(collection(db, 'payments'));
-      setAllPayments(paySnap.docs.map(d => ({ id: d.id, ...d.data() } as PaymentRecord)));
-
-      // Fetch all documents for summary
-      const docSnap = await getDocs(collection(db, 'documents'));
-      setAllDocuments(docSnap.docs.map(d => ({ id: d.id, ...d.data() } as RegistrationDocument)));
-
-      if (snap) {
-        setApplications(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentApplication)));
-      }
+      const res = await dataApi.getAdminApplications();
+      setApplications(res.data);
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching admin apps:", error);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const res = await dataApi.getLogs();
+      setLogs(res.data);
+    } catch (error) {
+      console.error("Error fetching logs:", error);
     }
   };
 
   const fetchDetails = async (app: StudentApplication) => {
     setSelectedApp(app);
-    // Fetch docs
-    const docsQ = query(collection(db, 'documents'), where('userId', '==', app.userId));
-    const docsSnap = await getDocs(docsQ);
-    setAppDocs(docsSnap.docs.map(d => ({ id: d.id, ...d.data() } as RegistrationDocument)));
-
-    // Fetch payment
-    const payQ = query(collection(db, 'payments'), where('userId', '==', app.userId), limit(1));
-    const paySnap = await getDocs(payQ);
-    if (!paySnap.empty) {
-        setAppPayment({ id: paySnap.docs[0].id, ...paySnap.docs[0].data() } as PaymentRecord);
-    } else {
-        setAppPayment(null);
+    try {
+      const res = await dataApi.getUserDocuments(app.userId);
+      setAppDocs(res.data);
+    } catch (error) {
+      console.error("Error fetching user docs:", error);
     }
   };
 
-  const updateDocStatus = async (docId: string, status: 'verified' | 'rejected') => {
-    const { doc: fDoc, setDoc: fSetDoc } = await import('firebase/firestore');
-    await fSetDoc(fDoc(db, 'documents', docId), { status }, { merge: true });
-    
-    // Log activity
-    await setDoc(doc(collection(db, 'logs')), {
-      userId: auth.currentUser?.uid,
-      action: 'UPDATE_DOC_STATUS',
-      details: `Changed status of document ${docId} to ${status}`,
-      timestamp: Date.now()
-    });
-
+  const updateDocStatus = async (docId: string, status: string) => {
+    await dataApi.updateDocumentStatus(docId, status);
     if (selectedApp) fetchDetails(selectedApp);
+  };
+
+  const hasPermission = (action: string) => {
+    if (profile.role === 'superadmin') return true;
+    if (profile.role === 'admin') return true; // Simplify for now
+    return false;
   };
 
   const updateStatus = async (status: ApplicationStatus, score?: number) => {
     if (!selectedApp) return;
-    const appRef = doc(db, 'applications', selectedApp.id);
-    
-    // If moving to test_ready, generate a participant number if it doesn't exist
-    const updateData: any = { status, updatedAt: Date.now() };
-    if (score !== undefined) updateData.score = score;
-    
-    if (status === 'test_ready' && !selectedApp.participantNumber) {
-      updateData.participantNumber = `UTN-${new Date().getFullYear() % 100}-${Math.floor(1000 + Math.random() * 9000)}`;
-    }
-
-    await setDoc(appRef, updateData, { merge: true });
-    
-    // Log activity
-    const logRef = doc(collection(db, 'logs'));
-    await setDoc(logRef, {
-      userId: auth.currentUser?.uid,
-      action: 'UPDATE_STATUS',
-      details: `Changed status of ${selectedApp.fullName} to ${status}${score ? ` with score ${score}` : ''}`,
-      timestamp: Date.now()
-    });
-
-    // Handle rejection email
-    if (status === 'rejected') {
-      try {
-        let recipientEmail = selectedApp.email;
-        
-        // Fallback: fetch from users collection if not in application
-        if (!recipientEmail) {
-          const { getDoc: fGetDoc } = await import('firebase/firestore');
-          const userSnap = await fGetDoc(doc(db, 'users', selectedApp.userId));
-          if (userSnap.exists()) {
-            recipientEmail = userSnap.data().email;
-          }
-        }
-
-        if (recipientEmail) {
-          await fetch('/api/send-rejection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: recipientEmail,
-              fullName: selectedApp.fullName
-            })
-          });
-          console.log(`[ADMIN] Rejection notification sent to ${recipientEmail}`);
-        } else {
-          console.warn("[ADMIN] Could not find email for rejection notification");
-        }
-      } catch (err) {
-        console.error("[ADMIN] Failed to send rejection email:", err);
-      }
-    }
-
-    alert(status === 'test_ready' 
-      ? `Data berhasil diverifikasi. Nomor peserta ${updateData.participantNumber || selectedApp.participantNumber} telah dibuat.`
-      : `Status pendaftar ${selectedApp.fullName} berhasil diperbarui.`
-    );
+    await dataApi.updateApplicationStatus(selectedApp.id, { status, score });
+    alert(`Status updated to ${status}`);
     setSelectedApp(null);
     fetchApplications();
   };
+
+  const isAdmin = profile.role === 'admin' || profile.role === 'superadmin';
+  const adminRole = profile.role;
 
   const getPaymentStatus = (userId: string) => {
     const payment = allPayments.find(p => p.userId === userId);

@@ -1,12 +1,9 @@
 import { useState, FormEvent } from 'react';
-import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, ShieldCheck, Mail, Lock, UserPlus, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { UserProfile } from '../types';
+import { authApi } from '../lib/api';
 
 export default function Register() {
   const [role, setRole] = useState<'applicant' | 'admin'>('applicant');
@@ -41,33 +38,19 @@ export default function Register() {
       return;
     }
 
-    if (!auth.app.options.apiKey || auth.app.options.apiKey === 'PLACEHOLDER_KEY') {
-      setError('Sistem Firebase belum dikonfigurasi. Harap tunggu atau hubungi admin.');
-      return;
-    }
-
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      const user = userCredential.user;
-
-      const newProfile: UserProfile = {
-        uid: user.uid,
+      await authApi.register({
         fullName: formData.fullName,
         email: formData.email,
+        password: formData.password,
         role: role === 'admin' ? 'superadmin' : 'applicant',
-        createdAt: Date.now(),
-      };
-
-      await setDoc(doc(db, 'users', user.uid), newProfile);
-      // Registration successful, App.tsx will handle the redirect because profile now exists
+      });
+      
+      window.location.href = '/'; // Reload to refresh auth state
     } catch (err: any) {
       console.error('Registration failed:', err);
-      if (err.code === 'auth/email-already-in-use') {
-        setError('Email sudah terdaftar. Silakan masuk.');
-      } else {
-        setError(err.message || 'Gagal mendaftar. Silakan coba lagi.');
-      }
+      setError(err.response?.data?.error || err.message || 'Gagal mendaftar. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }

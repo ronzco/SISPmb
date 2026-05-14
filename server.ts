@@ -3,8 +3,14 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { Resend } from "resend";
+import authRoutes from "./src/server/authRoutes";
+import dataRoutes from "./src/server/dataRoutes";
+import adminRoutes from "./src/server/adminRoutes";
+import { getDb } from "./src/db/db";
 
+// Handle ESM/CJS compatibility for paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -12,12 +18,24 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(cors());
+  app.use(cors({
+    origin: true,
+    credentials: true,
+  }));
   app.use(express.json());
+  app.use(cookieParser());
+
+  // Initialize DB connection optionally on startup
+  getDb().catch(err => console.warn("Database not connected yet. Will retry on request."));
 
   const resend = process.env.EMAIL_API_KEY ? new Resend(process.env.EMAIL_API_KEY) : null;
 
-  // API Route for confirmation email
+  // Mount API routes
+  app.use("/api/auth", authRoutes);
+  app.use("/api", dataRoutes);
+  app.use("/api/admin", adminRoutes);
+
+  // Email routes (keep existing logic)
   app.post("/api/send-confirmation", async (req, res) => {
     const { email, fullName, major } = req.body;
 

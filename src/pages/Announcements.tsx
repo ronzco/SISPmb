@@ -1,79 +1,21 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, orderBy, getDocs, where, limit } from 'firebase/firestore';
+import { dataApi } from '../lib/api';
 import { Announcement } from '../types';
 import { motion } from 'motion/react';
-import { Megaphone, Calendar, Tag, ChevronRight, Share2, Search } from 'lucide-react';
+import { Megaphone, Tag, ChevronRight, Share2, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Announcements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Default demo data since firestore might be empty initially
-  const demoAnnouncements: Announcement[] = [
-    {
-      id: '1',
-      title: 'Pendaftaran Jalur Beasiswa Gelombang II Dibuka',
-      content: 'Universitas Teknologi Nusantara membuka kesempatan beasiswa penuh untuk calon mahasiswa berprestasi di Gelombang II. Cek kuota masing-masing prodi...',
-      type: 'info',
-      createdAt: Date.now() - 1000 * 60 * 60 * 24, // Yesterday
-    },
-    {
-      id: '2',
-      title: 'Workshop Persiapan Perkuliahan Online (PP-Pro)',
-      content: 'Wajib diikuti oleh seluruh calon mahasiswa yang telah melakukan pembayaran biaya pendaftaran. Link zoom akan dibagikan melalui WhatsApp...',
-      type: 'warning',
-      createdAt: Date.now() - 1000 * 60 * 60 * 48,
-    },
-    {
-      id: '3',
-      title: 'Update Alamat Helpdesk PMB 2024',
-      content: 'Pusat layanan informasi kini berpindah ke Gedung Rektorat Lantai dasar. Jam operasional tetap 08.00 - 16.00 WIB.',
-      type: 'info',
-      createdAt: Date.now() - 1000 * 60 * 60 * 72,
-    }
-  ];
-
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
-        const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const fetched = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Announcement));
-        
-        let displayList = fetched.length > 0 ? fetched : demoAnnouncements;
-
-        // Add contextual announcements
-        if (auth.currentUser) {
-          const appQ = query(collection(db, 'applications'), where('userId', '==', auth.currentUser.uid), limit(1));
-          const appSnap = await getDocs(appQ);
-          if (!appSnap.empty) {
-            const app = appSnap.docs[0].data() as any;
-            if (app.status === 'accepted') {
-              displayList = [{
-                id: 'congrats',
-                title: '🎉 Selamat! Anda Dinyatakan Lulus Seleksi',
-                content: `Selamat kepada ${app.fullName || 'Anda'}. Anda telah resmi diterima di Program Studi ${app.major}. Silakan ikuti langkah registrasi ulang di bawah ini.`,
-                type: 'info',
-                createdAt: Date.now()
-              }, ...displayList];
-            } else if (app.status === 'rejected') {
-              displayList = [{
-                id: 'sorry',
-                title: 'Hasil Seleksi PMB Jalur Reguler 2024',
-                content: 'Setelah melalui proses seleksi yang ketat, kami menginformasikan bahwa Anda belum dapat bergabung bersama kami saat ini. Tetap semangat!',
-                type: 'urgent',
-                createdAt: Date.now()
-              }, ...displayList];
-            }
-          }
-        }
-
-        setAnnouncements(displayList);
+        const res = await dataApi.getAnnouncements();
+        setAnnouncements(res.data);
       } catch (error) {
         console.error('Error fetching announcements:', error);
-        setAnnouncements(demoAnnouncements);
       } finally {
         setLoading(false);
       }

@@ -1,9 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
-
-const app = initializeApp(firebaseConfig);
-// CRITICAL: The app will break without specifying the database ID from the config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
-export const auth = getAuth(app);
+// Firebase is no longer used in this project.
+// The application has been migrated to use a local MySQL database via XAMPP.
+export const auth = {} as any;
+export const db = {} as any;
+export const storage = {} as any;

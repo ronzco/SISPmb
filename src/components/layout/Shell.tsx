@@ -1,7 +1,6 @@
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
-import { User } from 'firebase/auth';
-import { UserProfile } from '../../types';
-import { auth } from '../../lib/firebase';
+import { AuthUser } from '../../types';
+import { authApi } from '../../lib/api';
 import { 
   LogOut, Bell, HelpCircle, 
   LayoutDashboard, FileEdit, FolderOpen, 
@@ -11,8 +10,8 @@ import {
 import { cn } from '../../lib/utils';
 
 interface ShellProps {
-  user: User;
-  profile: UserProfile | null;
+  user: AuthUser;
+  profile: AuthUser | null;
 }
 
 export default function Shell({ user, profile }: ShellProps) {
@@ -20,8 +19,12 @@ export default function Shell({ user, profile }: ShellProps) {
   const location = useLocation();
 
   const handleLogout = async () => {
-    await auth.signOut();
-    navigate('/login');
+    try {
+      await authApi.logout();
+      window.location.href = '/login';
+    } catch (error) {
+      navigate('/login');
+    }
   };
 
   const isAdminRole = profile?.role && profile.role !== 'applicant';
@@ -61,15 +64,11 @@ export default function Shell({ user, profile }: ShellProps) {
           
           <div className="flex items-center gap-2 md:gap-4 border-l border-slate-100 pl-2 md:pl-6">
             <div className="text-right hidden sm:block truncate max-w-[150px]">
-              <p className="text-xs font-black text-slate-900 truncate uppercase">{profile?.fullName || user.displayName}</p>
+              <p className="text-xs font-black text-slate-900 truncate uppercase">{profile?.fullName}</p>
               <p className="text-[9px] text-blue-600 font-bold uppercase tracking-widest mt-0.5">{profile?.role?.replace('_', ' ') || 'Applicant'}</p>
             </div>
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-black text-sm md:text-base shrink-0 overflow-hidden">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                profile?.fullName?.charAt(0) || 'U'
-              )}
+              {profile?.fullName?.charAt(0) || 'U'}
             </div>
             <button 
               onClick={handleLogout}
@@ -169,7 +168,7 @@ export default function Shell({ user, profile }: ShellProps) {
 
         {/* Main Content */}
         <main className="flex-1 min-w-0 overflow-y-auto">
-          <Outlet />
+          <Outlet context={{ user, profile }} />
         </main>
       </div>
 

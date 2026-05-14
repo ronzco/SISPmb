@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { auth, db } from '../lib/firebase';
-import { collection, query, where, getDocs, limit, doc, setDoc, orderBy } from 'firebase/firestore';
-import { handleFirestoreError, OperationType } from '../lib/fireErrorHandler';
-import { StudentApplication, RegistrationDocument, PaymentRecord, UserProfile, Announcement, FeeConfig } from '../types';
+import { useOutletContext } from 'react-router-dom';
+import { dataApi } from '../lib/api';
+import { StudentApplication, RegistrationDocument, PaymentRecord, Announcement, FeeConfig, AuthUser } from '../types';
 import { motion } from 'motion/react';
-import { CheckCircle2, Clock, FileText, CreditCard, ShieldCheck, Trophy, Bell, AlertCircle, Download, Megaphone, PenTool } from 'lucide-react';
+import { CheckCircle2, Clock, FileText, CreditCard, ShieldCheck, Trophy, Bell, Megaphone, PenTool } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Dashboard() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { profile } = useOutletContext<{ profile: AuthUser }>();
   const [application, setApplication] = useState<StudentApplication | null>(null);
   const [docs, setDocs] = useState<RegistrationDocument[]>([]);
   const [payment, setPayment] = useState<PaymentRecord | null>(null);
@@ -18,49 +17,24 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!auth.currentUser) return;
-      const uid = auth.currentUser.uid;
-      
-      const profileSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', uid), limit(1))).catch(e => handleFirestoreError(e, OperationType.GET, 'users'));
-      if (profileSnap && !profileSnap.empty) {
-        setProfile(profileSnap.docs[0].data() as UserProfile);
-      } else if (auth.currentUser) {
-        const newProfile: UserProfile = {
-          uid: auth.currentUser.uid,
-          fullName: auth.currentUser.displayName || 'Calon Mahasiswa',
-          email: auth.currentUser.email || '',
-          role: 'applicant',
-          createdAt: Date.now()
-        };
-        await setDoc(doc(db, 'users', uid), newProfile);
-        setProfile(newProfile);
+      try {
+        const [annRes, feeRes, appRes] = await Promise.all([
+          dataApi.getAnnouncements(),
+          dataApi.getFees(),
+          dataApi.getMyApplications(),
+        ]);
+        
+        setAnnouncements(annRes.data);
+        setFees(feeRes.data);
+        
+        if (appRes.data.length > 0) {
+          setApplication(appRes.data[0]);
+        }
+      } catch (error) {
+        console.error("Dashboard fetch error:", error);
+      } finally {
+        setLoading(false);
       }
-      
-      const annSnap = await getDocs(query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(5)));
-      setAnnouncements(annSnap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement)));
-
-      const feeSnap = await getDocs(query(collection(db, 'fees_config'), orderBy('updatedAt', 'desc')));
-      setFees(feeSnap.docs.map(d => ({ id: d.id, ...d.data() } as FeeConfig)));
-
-      const appQ = query(collection(db, 'applications'), where('userId', '==', uid), limit(1));
-      const appSnap = await getDocs(appQ).catch(e => handleFirestoreError(e, OperationType.LIST, 'applications'));
-      if (appSnap && !appSnap.empty) {
-        setApplication({ id: appSnap.docs[0].id, ...appSnap.docs[0].data() } as StudentApplication);
-      }
-
-      const docsQ = query(collection(db, 'documents'), where('userId', '==', uid));
-      const docsSnap = await getDocs(docsQ).catch(e => handleFirestoreError(e, OperationType.LIST, 'documents'));
-      if (docsSnap) {
-        setDocs(docsSnap.docs.map(d => ({ id: d.id, ...d.data() } as RegistrationDocument)));
-      }
-
-      const payQ = query(collection(db, 'payments'), where('userId', '==', uid), limit(1));
-      const paySnap = await getDocs(payQ).catch(e => handleFirestoreError(e, OperationType.LIST, 'payments'));
-      if (paySnap && !paySnap.empty) {
-        setPayment({ id: paySnap.docs[0].id, ...paySnap.docs[0].data() } as PaymentRecord);
-      }
-
-      setLoading(false);
     };
 
     fetchDashboardData();

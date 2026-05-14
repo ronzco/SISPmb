@@ -1,109 +1,48 @@
-import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
 import { User, ShieldCheck, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, FormEvent } from 'react';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { UserProfile } from '../types';
 import { cn } from '../lib/utils';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { authApi } from '../lib/api';
 
 export default function Login() {
   const [role, setRole] = useState<'applicant' | 'admin'>('applicant');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loginMethod, setLoginMethod] = useState<'email' | 'google'>('email');
+  const navigate = useNavigate();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const validateUserRole = async (user: any) => {
-    if (!user.email) throw new Error('Email tidak ditemukan.');
-    
-    const isCampusEmail = user.email.endsWith('@unutech.ac.id');
-    
-    if (role === 'admin' && !isCampusEmail) {
-      await signOut(auth);
-      throw new Error('Akses Admin memerlukan email kampus (@unutech.ac.id).');
-    }
-
-    const profileRef = doc(db, 'users', user.uid);
-    const profileSnap = await getDoc(profileRef);
-
-    if (!profileSnap.exists()) {
-      // If using Google Login and profile doesn't exist, create it
-      if (loginMethod === 'google' || !loginMethod) {
-        const newProfile: UserProfile = {
-          uid: user.uid,
-          fullName: user.displayName || 'User',
-          email: user.email,
-          role: role === 'admin' ? 'superadmin' : 'applicant',
-          createdAt: Date.now(),
-        };
-        await setDoc(profileRef, newProfile);
-      } else {
-        // If email login and no profile, something is wrong (should have registered)
-        await signOut(auth);
-        throw new Error('Akun ditemukan tetapi profil belum dibuat. Silakan daftar ulang.');
-      }
-    } else {
-      const existingProfile = profileSnap.data() as UserProfile;
-      const isAdminRole = existingProfile.role !== 'applicant';
-      
-      if (role === 'admin' && !isAdminRole) {
-        await signOut(auth);
-        throw new Error('Akun ini terdaftar sebagai Calon Mahasiswa. Silakan masuk sebagai Calon Mahasiswa.');
-      }
-      if (role === 'applicant' && isAdminRole) {
-        await signOut(auth);
-        throw new Error('Akun ini terdaftar sebagai Staf/Admin. Silakan masuk sebagai Staf/Admin.');
-      }
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setError(null);
-    if (!auth.app.options.apiKey || auth.app.options.apiKey === 'PLACEHOLDER_KEY') {
-      setError('Sistem Firebase belum dikonfigurasi. Harap tunggu atau hubungi admin.');
-      return;
-    }
-    setLoading(true);
-    setLoginMethod('google');
-    const provider = new GoogleAuthProvider();
-    
-    try {
-      const result = await signInWithPopup(auth, provider);
-      await validateUserRole(result.user);
-    } catch (err: any) {
-      console.error('Login failed:', err);
-      setError(err.message || 'Gagal masuk dengan Google.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleEmailLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!auth.app.options.apiKey || auth.app.options.apiKey === 'PLACEHOLDER_KEY') {
-      setError('Sistem Firebase belum dikonfigurasi. Harap tunggu atau hubungi admin.');
-      return;
-    }
     setLoading(true);
-    setLoginMethod('email');
 
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      await validateUserRole(result.user);
+      const response = await authApi.login({ email, password });
+      const user = response.data.user;
+
+      // Validate role based on selection
+      const isAdminRole = user.role !== 'applicant';
+      if (role === 'admin' && !isAdminRole) {
+        throw new Error('Akun ini terdaftar sebagai Calon Mahasiswa. Silakan masuk sebagai Calon Mahasiswa.');
+      }
+      if (role === 'applicant' && isAdminRole) {
+        throw new Error('Akun ini terdaftar sebagai Staf/Admin. Silakan masuk sebagai Staf/Admin.');
+      }
+
+      window.location.href = '/'; // Reload to refresh auth state
     } catch (err: any) {
       console.error('Login failed:', err);
-      let msg = 'Gagal masuk. Periksa email dan password Anda.';
-      if (err.code === 'auth/user-not-found') msg = 'Akun tidak ditemukan. Silakan daftar.';
-      if (err.code === 'auth/wrong-password') msg = 'Password salah.';
-      setError(msg);
+      setError(err.response?.data?.error || err.message || 'Gagal masuk. Periksa email dan password Anda.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleLogin = () => {
+    setError('Sync Google dinonaktifkan sementara untuk database lokal. Silakan gunakan Email & Password.');
   };
 
   return (

@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { doc, getDoc, setDoc, query, collection, where, getDocs, limit } from 'firebase/firestore';
-import { handleFirestoreError, OperationType } from '../lib/fireErrorHandler';
-import { StudentApplication, ApplicationStatus } from '../types';
+import { useOutletContext } from 'react-router-dom';
+import { dataApi } from '../lib/api';
+import { StudentApplication, ApplicationStatus, AuthUser } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, GraduationCap, MapPin, CheckCircle2, Save, Send } from 'lucide-react';
 import { cn } from '../lib/utils';
-
 import { FACULTIES } from '../constants/programs';
 
 export default function Registration() {
+  const { profile } = useOutletContext<{ profile: AuthUser }>();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,117 +25,55 @@ export default function Registration() {
     major: '',
   });
 
-  const selectedFaculty = FACULTIES.find(f => f.id === formData.program);
-
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [appStatus, setAppStatus] = useState<ApplicationStatus>('draft');
-
-  const validateStep = (s: number) => {
-    const newErrors: Record<string, string> = {};
-    if (s === 1) {
-      if (!formData.fullName) newErrors.fullName = 'Nama lengkap wajib diisi';
-      if (!formData.birthPlace) newErrors.birthPlace = 'Tempat lahir wajib diisi';
-      if (!formData.birthDate) newErrors.birthDate = 'Tanggal lahir wajib diisi';
-      if (!formData.gender) newErrors.gender = 'Pilih jenis kelamin';
-    } else if (s === 2) {
-      if (!formData.address) newErrors.address = 'Alamat wajib diisi';
-      if (!formData.phone) newErrors.phone = 'Nomor WhatsApp wajib diisi';
-      else if (!/^\d{10,13}$/.test(formData.phone)) newErrors.phone = 'Format nomor HP tidak valid';
-    } else if (s === 3) {
-      if (!formData.previousSchool) newErrors.previousSchool = 'Sekolah asal wajib diisi';
-      if (!formData.gradYear) newErrors.gradYear = 'Tahun lulus wajib diisi';
-      if (!formData.program) newErrors.program = 'Pilih fakultas';
-      if (!formData.major) newErrors.major = 'Pilih prodi';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const nextStep = () => {
-    if (validateStep(step)) setStep(step + 1);
-  };
+  const [appId, setAppId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchExistingData = async () => {
-      if (!auth.currentUser) return;
-      
-      const q = query(
-        collection(db, 'applications'),
-        where('userId', '==', auth.currentUser.uid),
-        limit(1)
-      );
-      const querySnapshot = await getDocs(q).catch(e => handleFirestoreError(e, OperationType.LIST, 'applications'));
-      
-      if (querySnapshot && !querySnapshot.empty) {
-        const app = querySnapshot.docs[0].data() as StudentApplication;
-        setFormData(prev => ({ ...prev, ...app as any }));
-        setAppStatus(app.status);
-      } else {
-        const profileRef = doc(db, 'users', auth.currentUser.uid);
-        const profileSnap = await getDoc(profileRef).catch(e => handleFirestoreError(e, OperationType.GET, `users/${auth.currentUser?.uid}`));
-        if (profileSnap && profileSnap.exists()) {
-          const profile = profileSnap.data();
+      try {
+        const response = await dataApi.getMyApplications();
+        if (response.data.length > 0) {
+          const app = response.data[0];
+          setFormData(prev => ({ ...prev, ...app }));
+          setAppStatus(app.status);
+          setAppId(app.id);
+        } else {
           setFormData(prev => ({ 
             ...prev, 
             fullName: profile.fullName || '',
-            email: profile.email || '',
           }));
         }
+      } catch (error) {
+        console.error("Fetch application error:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchExistingData();
-  }, []);
+  }, [profile]);
 
   const handleSave = async (isSubmit = false) => {
-    if (!auth.currentUser) return;
     if (isSubmit && !validateStep(step)) return;
     
     setSaving(true);
-    
     try {
-      const appId = auth.currentUser.uid;
-      const appRef = doc(db, 'applications', appId);
-      
-      const participantNumber = isSubmit ? `PMB-2024-${Math.floor(1000 + Math.random() * 9000)}` : (formData as any).participantNumber || null;
-
-      const payload: Partial<StudentApplication> = {
-        id: appId,
-        userId: auth.currentUser.uid,
-        status: isSubmit ? 'submitted' : 'draft',
-        updatedAt: Date.now(),
-        participantNumber: participantNumber ?? undefined,
-        fullName: formData.fullName,
-      };
-      
-      await setDoc(appRef, { ...formData, ...payload }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, `applications/${appId}`));
-      
-      // Log activity
-      const logRef = doc(collection(db, 'logs'));
-      await setDoc(logRef, {
-        userId: auth.currentUser.uid,
-        action: isSubmit ? 'SUBMIT_APPLICATION' : 'SAVE_DRAFT',
-        details: isSubmit ? `Submitted application for ${formData.major}` : 'Saved draft registration data',
-        timestamp: Date.now()
-      });
+      if (appId) {
+        await dataApi.updateApplication(appId, {
+          ...formData,
+          status: isSubmit ? 'submitted' : 'draft',
+        });
+      } else {
+        const res = await dataApi.createApplication({
+          ...formData,
+          status: isSubmit ? 'submitted' : 'draft',
+        });
+        setAppId(res.data.id);
+      }
 
       if (isSubmit) {
-        try {
-          await fetch('/api/send-confirmation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: auth.currentUser.email,
-              fullName: formData.fullName,
-              major: formData.major
-            })
-          });
-        } catch (e) {
-          console.error("Email notification failed:", e);
-        }
-
-        alert(`Pendaftaran Anda berhasil dikirimkan. Nomor Peserta: ${participantNumber}. Silakan cek status Anda di Dashboard.`);
+        alert(`Pendaftaran Anda berhasil dikirimkan. Silakan cek status Anda di Dashboard.`);
         setStep(4);
         setAppStatus('submitted');
       } else {
