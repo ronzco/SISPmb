@@ -530,7 +530,6 @@ export default function Dashboard() {
                   </p>
                 </div>
               )}
-
               <div className="space-y-3">
                  {fees.length > 0 ? fees.filter(f => !application?.major || f.description.toLowerCase().includes(application.major.toLowerCase()) || f.description.toLowerCase().includes('registrasi')).map((fee) => (
                    <div key={fee.id} className="flex justify-between items-center bg-white dark:bg-[#1A1F29] p-4 rounded-xl border border-slate-100 dark:border-slate-800 transition-all hover:border-emerald-500 shadow-sm">
@@ -543,12 +542,38 @@ export default function Dashboard() {
                  )) : (
                    <div className="text-center py-4 text-[10px] text-slate-400">Belum ada rincian biaya spesifik.</div>
                  )}
+                 
+                 {application?.status !== 'accepted' && !application?.reRegistrationPaid && (
+                   <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                     <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 text-center uppercase leading-relaxed">
+                       {application?.status === 'rejected' 
+                         ? "Mohon maaf, Anda belum dapat melanjutkan pembayaran."
+                         : "Pembayaran biaya kuliah akan dibuka setelah Anda dinyatakan LULUS seleksi."}
+                     </p>
+                   </div>
+                 )}
+
                  <button 
-                   onClick={() => window.location.href = '/payment?type=tuition'}
-                   className="w-full mt-4 py-4 bg-emerald-600 text-white border-none text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 dark:shadow-none flex items-center justify-center gap-2 disabled:bg-slate-400 disabled:shadow-none"
-                    disabled={application?.reRegistrationPaid}
+                   onClick={() => {
+                     if (application?.status !== 'accepted' && !application?.reRegistrationPaid) {
+                        alert("Harap tunggu sampai panitia memverifikasi hasil seleksi dan status Anda dinyatakan LULUS.");
+                        return;
+                     }
+                     window.location.href = '/payment?type=tuition';
+                   }}
+                   className={cn(
+                     "w-full mt-4 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                     (application?.status === 'accepted' || application?.reRegistrationPaid)
+                       ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl shadow-emerald-100 dark:shadow-none"
+                       : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed border border-slate-300 dark:border-slate-700"
+                   )}
+                   disabled={application?.reRegistrationPaid}
                  >
-                   {application?.reRegistrationPaid ? 'SUDAH DIBAYAR' : 'BAYAR BIAYA KULIAH'} <CreditCard size={14} />
+                   {application?.reRegistrationPaid 
+                     ? 'SUDAH DIBAYAR' 
+                     : application?.status === 'accepted' 
+                       ? 'BAYAR BIAYA KULIAH' 
+                       : 'BELUM TERSEDIA'} <CreditCard size={14} />
                  </button>
               </div>
            </div>

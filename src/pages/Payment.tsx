@@ -77,6 +77,24 @@ export default function Payment() {
     </div>
   );
 
+  // Restrict tuition payment if not accepted
+  if (paymentType === 'tuition' && application && application.status !== 'accepted' && !payments.some(p => p.category === 'tuition' && p.status === 'success')) {
+    return (
+       <div className="max-w-xl mx-auto mt-12 p-10 bg-white dark:bg-[#151921] rounded-[2.5rem] border border-amber-200 dark:border-amber-900/30 text-center">
+         <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+           <AlertCircle size={32} />
+         </div>
+         <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tighter">Pembayaran Belum Tersedia</h3>
+         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6 leading-relaxed">
+           Maaf, menu pembayaran biaya kuliah (UKT) hanya tersedia bagi calon mahasiswa yang telah dinyatakan LULUS seleksi. Harap tunggu verifikasi hasil seleksi dari panitia.
+         </p>
+         <button onClick={() => window.location.href = '/dashboard'} className="px-8 py-3 bg-slate-900 dark:bg-blue-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest active:scale-95 transition-all">
+           Kembali ke Dashboard
+         </button>
+       </div>
+    );
+  }
+
   const methods = [
     { id: 'VA', name: 'Virtual Account', icon: <CreditCard size={18} />, color: 'blue' },
     { id: 'QRIS', name: 'QRIS / E-Money', icon: <RefreshCw size={18} />, color: 'green' },
