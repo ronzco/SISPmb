@@ -12,6 +12,7 @@ import PaymentPage from './pages/Payment';
 import Announcements from './pages/Announcements';
 import Fees from './pages/Fees';
 import AdminDashboard from './pages/Admin';
+import AdminDiagrams from './pages/AdminDiagrams';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="fees" element={<Fees />} />
           <Route path="announcements" element={<Announcements />} />
           <Route path="admin" element={<AdminDashboard />} />
+          <Route path="admin/diagrams" element={<AdminDiagrams />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

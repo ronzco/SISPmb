@@ -62,6 +62,7 @@ export default function Shell({ user, profile }: ShellProps) {
     { name: 'Admin Console', path: '/admin', icon: ShieldAlert },
     { name: 'Financial Config', path: '/fees', icon: DollarSign },
     { name: 'Newsroom', path: '/announcements', icon: Megaphone },
+    { name: 'System Diagrams', path: '/admin/diagrams', icon: HelpCircle },
   ] : [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     ...(appStatus === 'draft' || !hasApplication ? [{ 
