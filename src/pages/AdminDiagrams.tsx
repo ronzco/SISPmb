@@ -6,6 +6,132 @@ import {
   AlertCircle, ChevronRight, FileText, LayoutDashboard, Code, Shield
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { getCanvasHeight, getActivityPaths, getPathLabelsOverlay, getUmlNodes, getSequenceSteps } from './umlData';
+
+// Helper to calculate exact sequence diagram canvas height dynamically
+const getSequenceCanvasHeight = (subId: string): number => {
+  switch (subId) {
+    case 'auth_register': return 520;
+    case 'auth_login': return 500;
+    case 'admin_announcements': return 460;
+    case 'admin_tuition': return 410;
+    case 'admin_verify_docs': return 660;
+    case 'admin_verify_test': return 610;
+    case 'student_upload': return 460;
+    case 'student_reg': return 410;
+    case 'student_pay': return 610;
+    case 'student_card': return 500;
+    case 'student_complete': return 750;
+    default: return 600;
+  }
+};
+
+// Helper to render dynamic activation bars tailored for each subdiagram
+const renderActivationBars = (subId: string) => {
+  switch (subId) {
+    case 'auth_register':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="340" rx="3" />
+          <rect x="352" y="110" width="16" height="340" rx="3" />
+          <rect x="592" y="155" width="16" height="250" rx="3" />
+          <rect x="832" y="200" width="16" height="155" rx="3" />
+        </>
+      );
+    case 'auth_login':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="325" rx="3" />
+          <rect x="352" y="110" width="16" height="325" rx="3" />
+          <rect x="592" y="160" width="16" height="225" rx="3" />
+          <rect x="832" y="210" width="16" height="70" rx="3" />
+        </>
+      );
+    case 'admin_announcements':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="80" rx="3" />
+          <rect x="352" y="110" width="16" height="225" rx="3" />
+          <rect x="592" y="160" width="16" height="225" rx="3" />
+          <rect x="832" y="210" width="16" height="70" rx="3" />
+        </>
+      );
+    case 'admin_tuition':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="80" rx="3" />
+          <rect x="352" y="110" width="16" height="225" rx="3" />
+          <rect x="592" y="160" width="16" height="175" rx="3" />
+          <rect x="832" y="210" width="16" height="70" rx="3" />
+        </>
+      );
+    case 'admin_verify_docs':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="280" rx="3" />
+          <rect x="352" y="110" width="16" height="480" rx="3" />
+          <rect x="592" y="160" width="16" height="430" rx="3" />
+          <rect x="832" y="210" width="16" height="325" rx="3" />
+        </>
+      );
+    case 'admin_verify_test':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="430" rx="3" />
+          <rect x="352" y="110" width="16" height="430" rx="3" />
+          <rect x="592" y="160" width="16" height="330" rx="3" />
+          <rect x="832" y="260" width="16" height="170" rx="3" />
+        </>
+      );
+    case 'student_upload':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="280" rx="3" />
+          <rect x="352" y="110" width="16" height="280" rx="3" />
+          <rect x="592" y="160" width="16" height="225" rx="3" />
+          <rect x="832" y="260" width="16" height="70" rx="3" />
+        </>
+      );
+    case 'student_reg':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="225" rx="3" />
+          <rect x="352" y="110" width="16" height="225" rx="3" />
+          <rect x="592" y="160" width="16" height="175" rx="3" />
+          <rect x="832" y="210" width="16" height="70" rx="3" />
+        </>
+      );
+    case 'student_pay':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="430" rx="3" />
+          <rect x="352" y="110" width="16" height="430" rx="3" />
+          <rect x="592" y="160" width="16" height="380" rx="3" />
+          <rect x="832" y="210" width="16" height="275" rx="3" />
+        </>
+      );
+    case 'student_card':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="325" rx="3" />
+          <rect x="352" y="110" width="16" height="325" rx="3" />
+          <rect x="592" y="160" width="16" height="225" rx="3" />
+          <rect x="832" y="210" width="16" height="70" rx="3" />
+        </>
+      );
+    case 'student_complete':
+      return (
+        <>
+          <rect x="112" y="110" width="16" height="430" rx="3" />
+          <rect x="352" y="110" width="16" height="570" rx="3" />
+          <rect x="592" y="155" width="16" height="520" rx="3" />
+          <rect x="832" y="200" width="16" height="475" rx="3" />
+        </>
+      );
+    default:
+      return null;
+  }
+};
 
 export default function AdminDiagrams() {
   const [activeTab, setActiveTab] = useState<'usecase' | 'activity' | 'sequence' | 'class'>('usecase');
@@ -15,7 +141,7 @@ export default function AdminDiagrams() {
   const [seqActivePhase, setSeqActivePhase] = useState<'all' | 'registration' | 'selection' | 'reregistration'>('all');
   const [hoveredClass, setHoveredClass] = useState<string | null>(null);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
-  const [selectedSubDiagram, setSelectedSubDiagram] = useState<'auth' | 'admin' | 'student'>('student');
+  const [selectedSubDiagram, setSelectedSubDiagram] = useState<string>('auth_register');
 
   // Swimlanes Data for Activity Diagram
   const activitySteps = [
@@ -370,7 +496,7 @@ export default function AdminDiagrams() {
     </>
   );
 
-  const getUmlNodes = () => {
+  const getUmlNodes_old = () => {
     if (selectedSubDiagram === 'auth') {
       return [
         { 
@@ -741,7 +867,7 @@ export default function AdminDiagrams() {
     }
   };
 
-  const getSequenceSteps = () => {
+  const getSequenceSteps_old = () => {
     if (selectedSubDiagram === 'auth') {
       return [
         {
@@ -1273,13 +1399,13 @@ export default function AdminDiagrams() {
     }
   };
 
-  const sequenceSteps = (getSequenceSteps() || []).map((step: any) => ({
+  const sequenceSteps = (getSequenceSteps(selectedSubDiagram) || []).map((step: any) => ({
     ...step,
     desc: step.details || '',
     isSelfLoop: step.isSelfLoop || false,
     isDashed: step.isDashed !== undefined ? step.isDashed : (step.fromX > step.toX)
   }));
-  const umlNodes = getUmlNodes();
+  const umlNodes = getUmlNodes(selectedSubDiagram);
 
   // Sequence Diagram Steps
   const _ignored_sequenceSteps = [
@@ -2082,72 +2208,183 @@ export default function AdminDiagrams() {
             <div>
               <h3 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-wider flex items-center gap-2">
                 <Layers size={16} className="text-blue-500" />
-                Pilih Aliran Diagram (Sub-Diagram)
+                Pilih Aliran Diagram (11 Sub-Diagram Prosedural)
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
-                SIPMB membagi proses sistem menjadi 3 bagian utama sesuai permintaan kebutuhan fungsional.
+                SIPMB membagi proses sistem menjadi 11 sub-diagram berdasarkan prosedur pendaftaran, verifikasi berkas, seleksi offline, dan pengumuman.
               </p>
             </div>
             <div className="text-[10px] bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-black px-3 py-1.5 rounded-full uppercase tracking-wider border border-blue-200 dark:border-blue-900/40">
-              Mode Aktif: {selectedSubDiagram === 'auth' ? 'Autentikasi' : selectedSubDiagram === 'admin' ? 'Kelola Admin' : 'Pendaftaran Mhs'}
+              Mode Aktif: {
+                selectedSubDiagram === 'auth_register' ? '1. Register' :
+                selectedSubDiagram === 'auth_login' ? '2. Login' :
+                selectedSubDiagram === 'admin_announcements' ? '3. Kelola Pengumuman' :
+                selectedSubDiagram === 'admin_tuition' ? '4. Kelola Biaya' :
+                selectedSubDiagram === 'admin_verify_docs' ? '5. Verifikasi Berkas' :
+                selectedSubDiagram === 'admin_verify_test' ? '6. Verifikasi Tes' :
+                selectedSubDiagram === 'student_upload' ? '7. Upload Dokumen' :
+                selectedSubDiagram === 'student_reg' ? '8. Pendaftaran Kuliah' :
+                selectedSubDiagram === 'student_pay' ? '9. Pembayaran Biaya' :
+                selectedSubDiagram === 'student_card' ? '10. Cetak Kartu Tes' :
+                '11. Selesaikan/Ulangi'
+              }
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                id: 'auth',
-                title: '1. Autentikasi & Akun',
-                actor: 'Calon Mahasiswa & Super Admin',
-                desc: 'Alur pembuatan akun baru (Register) dan Login sistem untuk memulai sesi pendaftaran.',
-                color: 'border-blue-500/20 bg-blue-50/10 dark:bg-blue-950/10'
-              },
-              {
-                id: 'admin',
-                title: '2. Kelola & Verifikasi Admin',
-                actor: 'Admin Panitia PMB',
-                desc: 'Alur kelola pengumuman prodi, kelola biaya kuliah, verifikasi berkas, & verifikasi nilai ujian offline.',
-                color: 'border-indigo-500/20 bg-indigo-50/10 dark:bg-indigo-950/10'
-              },
-              {
-                id: 'student',
-                title: '3. Pendaftaran Calon Mahasiswa',
-                actor: 'Calon Mahasiswa',
-                desc: 'Upload dokumen, pendaftaran prodi, bayar pendaftaran, cetak kartu tes offline, & selesai/ulangi.',
-                color: 'border-emerald-500/20 bg-emerald-50/10 dark:bg-emerald-950/10'
-              }
-            ].map((sub) => {
-              const isSelected = selectedSubDiagram === sub.id;
-              return (
-                <button
-                  key={sub.id}
-                  onClick={() => setSelectedSubDiagram(sub.id as any)}
-                  className={cn(
-                    "p-5 rounded-2xl border text-left transition-all relative overflow-hidden group/sub",
-                    isSelected 
-                      ? "border-blue-600 dark:border-blue-500 bg-white dark:bg-slate-800 shadow-md ring-4 ring-blue-500/5" 
-                      : "border-slate-200 dark:border-slate-800 bg-[#fbfcfd] dark:bg-[#1a1f2c]/20 hover:bg-slate-100/50 dark:hover:bg-slate-800/40"
-                  )}
-                >
-                  {isSelected && (
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600 dark:bg-blue-500" />
-                  )}
-                  <div className={cn(
-                    "font-black text-xs uppercase tracking-tight transition-colors flex items-center justify-between",
-                    isSelected ? "text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-white group-hover/sub:text-blue-600 dark:group-hover/sub:text-blue-400"
-                  )}>
-                    <span>{sub.title}</span>
-                    {isSelected && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-                  </div>
-                  <div className="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase mt-1">
-                    Aktor: {sub.actor}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2.5 font-medium leading-relaxed">
-                    {sub.desc}
-                  </div>
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* GROUP 1: AUTHENTICATION */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-blue-100 dark:border-blue-900/30">
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-wider">I. Calon Mahasiswa & Super Admin</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5">
+                {[
+                  {
+                    id: 'auth_register',
+                    title: '1. Register Akun',
+                    desc: 'Proses pembuatan akun mandiri calon mahasiswa baru.'
+                  },
+                  {
+                    id: 'auth_login',
+                    title: '2. Login Sistem',
+                    desc: 'Sesi masuk multi-role untuk memulai modul pengisian pendaftaran.'
+                  }
+                ].map((sub) => {
+                  const isSelected = selectedSubDiagram === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      onClick={() => setSelectedSubDiagram(sub.id)}
+                      className={cn(
+                        "p-3.5 rounded-xl border text-left transition-all relative overflow-hidden group/sub",
+                        isSelected 
+                          ? "border-blue-600 dark:border-blue-500 bg-white dark:bg-slate-800 shadow-sm ring-2 ring-blue-500/10" 
+                          : "border-slate-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-900/10 hover:bg-slate-100/50 dark:hover:bg-slate-800/40"
+                      )}
+                    >
+                      {isSelected && <div className="absolute top-0 left-0 w-1 h-full bg-blue-600 dark:bg-blue-500" />}
+                      <div className="font-bold text-xs text-slate-850 dark:text-slate-100 flex items-center justify-between">
+                        <span className={cn(isSelected ? "text-blue-600 dark:text-blue-400" : "")}>{sub.title}</span>
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-snug">{sub.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* GROUP 2: ADMIN PANITIA */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-indigo-100 dark:border-indigo-900/30">
+                <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">II. Admin Panitia PMB</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5">
+                {[
+                  {
+                    id: 'admin_announcements',
+                    title: '3. Kelola Pengumuman',
+                    desc: 'Publikasi kelulusan & info prodi di beranda portal.'
+                  },
+                  {
+                    id: 'admin_tuition',
+                    title: '4. Kelola Biaya Kuliah',
+                    desc: 'Konfigurasi tagihan UKT semester per program studi.'
+                  },
+                  {
+                    id: 'admin_verify_docs',
+                    title: '5. Verifikasi Berkas',
+                    desc: 'Pengecekan keabsahan dokumen persyaratan unggahan.'
+                  },
+                  {
+                    id: 'admin_verify_test',
+                    title: '6. Verifikasi Ujian Offline',
+                    desc: 'Input & verifikasi nilai hasil ujian tulis offline mandiri.'
+                  }
+                ].map((sub) => {
+                  const isSelected = selectedSubDiagram === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      onClick={() => setSelectedSubDiagram(sub.id)}
+                      className={cn(
+                        "p-3.5 rounded-xl border text-left transition-all relative overflow-hidden group/sub",
+                        isSelected 
+                          ? "border-indigo-600 dark:border-indigo-500 bg-white dark:bg-slate-800 shadow-sm ring-2 ring-indigo-500/10" 
+                          : "border-slate-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-900/10 hover:bg-slate-100/50 dark:hover:bg-slate-800/40"
+                      )}
+                    >
+                      {isSelected && <div className="absolute top-0 left-0 w-1 h-full bg-indigo-600 dark:bg-indigo-500" />}
+                      <div className="font-bold text-xs text-slate-850 dark:text-slate-100 flex items-center justify-between">
+                        <span className={cn(isSelected ? "text-indigo-600 dark:text-indigo-400" : "")}>{sub.title}</span>
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />}
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-snug">{sub.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* GROUP 3: STUDENT PROCESS */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-emerald-100 dark:border-emerald-900/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">III. Calon Mahasiswa Baru</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5">
+                {[
+                  {
+                    id: 'student_upload',
+                    title: '7. Upload Dokumen',
+                    desc: 'Penyampaian berkas fisik di FO lalu diunggah ke sistem.'
+                  },
+                  {
+                    id: 'student_reg',
+                    title: '8. Pendaftaran Kuliah',
+                    desc: 'Pengisian program studi tujuan dan kelengkapan biodata.'
+                  },
+                  {
+                    id: 'student_pay',
+                    title: '9. Pembayaran Biaya',
+                    desc: 'Simulasi/bukti pembayaran registrasi pendaftaran.'
+                  },
+                  {
+                    id: 'student_card',
+                    title: '10. Ambil Kartu Tes (Offline)',
+                    desc: 'Pencetakan kartu peserta ujian offline terpisah.'
+                  },
+                  {
+                    id: 'student_complete',
+                    title: '11. Selesaikan / Ulangi',
+                    desc: 'Penyelesaian berkas pendaftaran atau mendaftar ulang.'
+                  }
+                ].map((sub) => {
+                  const isSelected = selectedSubDiagram === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      onClick={() => setSelectedSubDiagram(sub.id)}
+                      className={cn(
+                        "p-3.5 rounded-xl border text-left transition-all relative overflow-hidden group/sub",
+                        isSelected 
+                          ? "border-emerald-600 dark:border-emerald-500 bg-white dark:bg-slate-800 shadow-sm ring-2 ring-emerald-500/10" 
+                          : "border-slate-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-900/10 hover:bg-slate-100/50 dark:hover:bg-slate-800/40"
+                      )}
+                    >
+                      {isSelected && <div className="absolute top-0 left-0 w-1 h-full bg-emerald-600 dark:bg-emerald-500" />}
+                      <div className="font-bold text-xs text-slate-850 dark:text-slate-100 flex items-center justify-between">
+                        <span className={cn(isSelected ? "text-emerald-600 dark:text-emerald-400" : "")}>{sub.title}</span>
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-snug">{sub.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2532,14 +2769,14 @@ export default function AdminDiagrams() {
                   <div className="p-4 bg-slate-100 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs">
                     <span className="font-black text-slate-800 dark:text-white uppercase tracking-widest">UML Canvas - SIPMB Flow</span>
                     <span className="text-[10px] text-slate-400 font-bold">
-                      Lebar: 960px | Tinggi: {selectedSubDiagram === 'auth' ? '750px' : selectedSubDiagram === 'admin' ? '580px' : '950px'} (Geser ke samping bila terpotong)
+                      Lebar: 960px | Tinggi: {getCanvasHeight(selectedSubDiagram)}px (Geser ke samping bila terpotong)
                     </span>
                   </div>
 
                   <div className="overflow-x-auto p-4 md:p-8 scrollbar-thin">
                     <div 
                       className="relative w-[960px] bg-white dark:bg-[#0c1017] rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-md transition-all duration-300"
-                      style={{ height: selectedSubDiagram === 'auth' ? '750px' : selectedSubDiagram === 'admin' ? '580px' : '950px' }}
+                      style={{ height: `${getCanvasHeight(selectedSubDiagram)}px` }}
                     >
                       
                       {/* Vertical Swimlane Lines (Partitions) */}
@@ -2553,7 +2790,7 @@ export default function AdminDiagrams() {
                               <User size={12} />
                             </div>
                             <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">
-                              {selectedSubDiagram === 'student' ? 'Calon Mahasiswa' : selectedSubDiagram === 'admin' ? 'Admin Panitia PMB' : 'Calon Mahasiswa / Super Admin'}
+                              {selectedSubDiagram === 'student_upload' || selectedSubDiagram === 'student_reg' || selectedSubDiagram === 'student_pay' || selectedSubDiagram === 'student_card' || selectedSubDiagram === 'student_complete' ? 'Calon Mahasiswa' : selectedSubDiagram.startsWith('admin_') ? 'Admin Panitia' : 'Aktor Utama'}
                             </span>
                           </div>
                         </div>
@@ -2577,7 +2814,7 @@ export default function AdminDiagrams() {
                               <Shield size={12} />
                             </div>
                             <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">
-                              {selectedSubDiagram === 'student' ? 'Offline Desk / Kampus' : 'Database (SQL)'}
+                              {selectedSubDiagram === 'student_card' ? 'Loket Ujian Offline' : 'Database / Storage'}
                             </span>
                           </div>
                         </div>
@@ -2586,7 +2823,7 @@ export default function AdminDiagrams() {
                       {/* SVG CONNECTIONS (CONTROL FLOW LAYER) */}
                       <svg 
                         className="absolute inset-0 pointer-events-none w-[960px] transition-all duration-300" 
-                        style={{ zIndex: 10, height: selectedSubDiagram === 'auth' ? '750px' : selectedSubDiagram === 'admin' ? '580px' : '950px' }}
+                        style={{ zIndex: 10, height: `${getCanvasHeight(selectedSubDiagram)}px` }}
                       >
                         <defs>
                           <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -2604,35 +2841,12 @@ export default function AdminDiagrams() {
                         </defs>
 
                         {/* Render active paths based on selected diagram */}
-                        {selectedSubDiagram === 'auth' && getAuthActivityPaths()}
-                        {selectedSubDiagram === 'admin' && getAdminActivityPaths()}
-                        {selectedSubDiagram === 'student' && getStudentActivityPaths()}
+                        {getActivityPaths(selectedSubDiagram, selectedNotation)}
                       </svg>
 
                       {/* TEXT LABELS OVERLAY */}
                       <div className="absolute inset-0 font-mono text-[9px] font-black pointer-events-none select-none" style={{ zIndex: 12 }}>
-                        {selectedSubDiagram === 'auth' && (
-                          <>
-                            <span className="absolute left-[540px] top-[430px] text-rose-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded">[Tidak Valid]</span>
-                            <span className="absolute left-[490px] top-[515px] text-emerald-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded">[Valid / Sukses]</span>
-                          </>
-                        )}
-                        {selectedSubDiagram === 'admin' && (
-                          <>
-                            <span className="absolute left-[520px] top-[290px] text-rose-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded rotate-90">[Revisi Berkas]</span>
-                            <span className="absolute left-[340px] top-[350px] text-emerald-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded">[Valid]</span>
-                            <span className="absolute left-[540px] top-[400px] text-emerald-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded">[Lolos]</span>
-                            <span className="absolute left-[490px] top-[460px] text-rose-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded">[Gagal]</span>
-                          </>
-                        )}
-                        {selectedSubDiagram === 'student' && (
-                          <>
-                            <span className="absolute left-[260px] top-[395px] text-emerald-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded">[Ya / Lunas]</span>
-                            <span className="absolute left-[540px] top-[375px] text-rose-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded rotate-90">[Gagal / Expired]</span>
-                            <span className="absolute left-[490px] top-[740px] text-emerald-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded">[Selesai]</span>
-                            <span className="absolute left-[560px] top-[675px] text-rose-500 bg-white dark:bg-[#0c1017] px-1 text-center font-semibold rounded rotate-90">[Pending]</span>
-                          </>
-                        )}
+                        {getPathLabelsOverlay(selectedSubDiagram)}
                       </div>
 
                       {/* UML DIAGRAM NODES INTERACTIVE COMPONENT TREE */}
@@ -3100,7 +3314,7 @@ export default function AdminDiagrams() {
                     {/* UML Diagram Name Label */}
                     <div className="absolute top-0 left-0 bg-white dark:bg-[#11151c] border-2 border-slate-800 dark:border-slate-700 rounded-br-2xl px-5 py-2 z-20 shadow-xs flex items-center gap-2">
                       <span className="font-mono text-xs font-black uppercase tracking-wider text-slate-950 dark:text-white">
-                        {selectedSubDiagram === 'auth' ? 'sd Autentikasi (Register / Login)' : selectedSubDiagram === 'admin' ? 'sd Kelola & Verifikasi Admin' : 'sd Pendaftaran Calon Mahasiswa'}
+                        {selectedSubDiagram.startsWith('auth_') ? 'sd Autentikasi (Register / Login)' : selectedSubDiagram.startsWith('admin_') ? 'sd Kelola & Verifikasi Admin' : 'sd Pendaftaran Calon Mahasiswa'}
                       </span>
                     </div>
 
@@ -3120,28 +3334,28 @@ export default function AdminDiagrams() {
                           </svg>
                         </div>
                         <span className="font-mono text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-300">
-                          {selectedSubDiagram === 'auth' ? ':CalonMhs / Admin' : selectedSubDiagram === 'admin' ? ':AdminPanitia' : ':CalonMahasiswa'}
+                          {selectedSubDiagram.startsWith('auth_') ? ':CalonMhs / Admin' : selectedSubDiagram.startsWith('admin_') ? ':AdminPanitia' : ':CalonMahasiswa'}
                         </span>
                       </div>
 
                       {/* Mendaftar:Interface */}
                       <div className="flex flex-col items-center justify-end h-28">
                         <div className="px-5 py-3.5 bg-slate-900 text-white dark:bg-slate-800 rounded-xl border-2 border-slate-700 dark:border-slate-600 shadow-xs max-w-[180px] w-full font-mono text-xs font-black uppercase tracking-wide">
-                          {selectedSubDiagram === 'auth' ? 'RegisterLogin:View' : selectedSubDiagram === 'admin' ? 'DashboardAdmin:View' : 'Pendaftaran:View'}
+                          {selectedSubDiagram.startsWith('auth_') ? 'RegisterLogin:View' : selectedSubDiagram.startsWith('admin_') ? 'DashboardAdmin:View' : 'Pendaftaran:View'}
                         </div>
                       </div>
 
                       {/* Mendaftar:Controller */}
                       <div className="flex flex-col items-center justify-end h-28">
                         <div className="px-5 py-3.5 bg-slate-900 text-white dark:bg-slate-800 rounded-xl border-2 border-slate-700 dark:border-slate-600 shadow-xs max-w-[180px] w-full font-mono text-xs font-black uppercase tracking-wide">
-                          {selectedSubDiagram === 'auth' ? 'AuthController' : selectedSubDiagram === 'admin' ? 'AdminController' : 'StudentController'}
+                          {selectedSubDiagram.startsWith('auth_') ? 'AuthController' : selectedSubDiagram.startsWith('admin_') ? 'AdminController' : 'StudentController'}
                         </div>
                       </div>
 
                       {/* Tabel:Pendaftar */}
                       <div className="flex flex-col items-center justify-end h-28">
                         <div className="px-5 py-3.5 bg-slate-900 text-white dark:bg-slate-800 rounded-xl border-2 border-slate-700 dark:border-slate-600 shadow-xs max-w-[180px] w-full font-mono text-xs font-black uppercase tracking-wide">
-                          {selectedSubDiagram === 'auth' ? 'Tabel:Users' : selectedSubDiagram === 'admin' ? 'Tabel:PMBData' : 'Tabel:Applications'}
+                          {selectedSubDiagram.startsWith('auth_') ? 'Tabel:Users' : selectedSubDiagram.startsWith('admin_') ? 'Tabel:PMBData' : 'Tabel:Applications'}
                         </div>
                       </div>
 
@@ -3153,7 +3367,7 @@ export default function AdminDiagrams() {
                       {/* MASTER SVG LAYER FOR LIFELINES & ARROWS */}
                       <svg 
                         width="960" 
-                        height={selectedSubDiagram === 'auth' ? '750' : selectedSubDiagram === 'admin' ? '780' : '1260'} 
+                        height={getSequenceCanvasHeight(selectedSubDiagram)} 
                         className="absolute top-0 left-0 pointer-events-none z-0 transition-all duration-300"
                       >
                         <defs>
@@ -3169,103 +3383,60 @@ export default function AdminDiagrams() {
 
                         {/* Lifeline vertical dashed lines */}
                         <g stroke="#94a3b8" strokeWidth="2" strokeDasharray="6 6" opacity="0.6">
-                          <line x1="120" y1="0" x2="120" y2={selectedSubDiagram === 'auth' ? '730' : selectedSubDiagram === 'admin' ? '760' : '1240'} />
-                          <line x1="360" y1="0" x2="360" y2={selectedSubDiagram === 'auth' ? '730' : selectedSubDiagram === 'admin' ? '760' : '1240'} />
-                          <line x1="600" y1="0" x2="600" y2={selectedSubDiagram === 'auth' ? '730' : selectedSubDiagram === 'admin' ? '760' : '1240'} />
-                          <line x1="840" y1="0" x2="840" y2={selectedSubDiagram === 'auth' ? '730' : selectedSubDiagram === 'admin' ? '760' : '1240'} />
+                          <line x1="120" y1="0" x2="120" y2={getSequenceCanvasHeight(selectedSubDiagram) - 20} />
+                          <line x1="360" y1="0" x2="360" y2={getSequenceCanvasHeight(selectedSubDiagram) - 20} />
+                          <line x1="600" y1="0" x2="600" y2={getSequenceCanvasHeight(selectedSubDiagram) - 20} />
+                          <line x1="840" y1="0" x2="840" y2={getSequenceCanvasHeight(selectedSubDiagram) - 20} />
                         </g>
 
                         {/* UML Activation Bars (Focus of Control) */}
-                        <g fill="#f1f5f9" stroke="#475569" strokeWidth="2" opacity="0.9">
-                          {selectedSubDiagram === 'auth' && (
-                            <>
-                              <rect x="112" y="140" width="16" height="380" rx="3" />
-                              <rect x="352" y="140" width="16" height="420" rx="3" />
-                              <rect x="592" y="150" width="16" height="440" rx="3" />
-                              <rect x="832" y="170" width="16" height="350" rx="3" />
-                            </>
-                          )}
-                          {selectedSubDiagram === 'admin' && (
-                            <>
-                              <rect x="112" y="140" width="16" height="480" rx="3" />
-                              <rect x="352" y="140" width="16" height="500" rx="3" />
-                              <rect x="592" y="150" width="16" height="520" rx="3" />
-                              <rect x="832" y="170" width="16" height="420" rx="3" />
-                            </>
-                          )}
-                          {selectedSubDiagram === 'student' && (
-                            <>
-                              <rect x="112" y="140" width="16" height="370" rx="3" />
-                              <rect x="112" y="550" width="16" height="340" rx="3" />
-                              <rect x="112" y="930" width="16" height="260" rx="3" />
-
-                              <rect x="352" y="140" width="16" height="370" rx="3" />
-                              <rect x="352" y="550" width="16" height="200" rx="3" />
-                              <rect x="352" y="930" width="16" height="110" rx="3" />
-
-                              <rect x="592" y="160" width="16" height="350" rx="3" />
-                              <rect x="592" y="570" width="16" height="180" rx="3" />
-                              <rect x="592" y="770" width="16" height="120" rx="3" />
-                              <rect x="592" y="950" width="16" height="240" rx="3" />
-
-                              <rect x="832" y="325" width="16" height="100" rx="3" />
-                              <rect x="832" y="595" width="16" height="140" rx="3" />
-                              <rect x="832" y="775" width="16" height="105" rx="3" />
-                              <rect x="832" y="1010" width="16" height="115" rx="3" />
-                            </>
-                          )}
+                        <g fill="#f1f5f9" stroke="#475569" strokeWidth="2" opacity="0.9" className="dark:fill-slate-800 dark:stroke-slate-400">
+                          {renderActivationBars(selectedSubDiagram)}
                         </g>
 
                         {/* Alt Conditional Frames */}
-                        {selectedSubDiagram === 'auth' && (
+                        {selectedSubDiagram === 'auth_login' && (
                           <g>
-                            <rect x="50" y="350" width="850" height="180" fill="none" stroke="#475569" strokeWidth="1.5" />
-                            <polygon points="50,350 110,350 120,365 50,365" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
-                            <text x="60" y="361" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="#000" className="dark:fill-white">Alt</text>
-                            <line x1="50" y1="440" x2="900" y2="440" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
-                            <text x="65" y="380" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[invalid/gagal]</text>
-                            <text x="65" y="470" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[valid/sukses]</text>
+                            <rect x="50" y="340" width="850" height="110" fill="none" stroke="#475569" strokeWidth="1.5" />
+                            <polygon points="50,340 110,340 120,355 50,355" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" className="dark:fill-[#11151c]" />
+                            <text x="60" y="351" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="currentColor" className="text-slate-900 dark:text-slate-100">Alt</text>
+                            <line x1="50" y1="395" x2="900" y2="395" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
+                            <text x="65" y="375" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[sukses]</text>
+                            <text x="65" y="425" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[gagal/invalid]</text>
                           </g>
                         )}
 
-                        {selectedSubDiagram === 'admin' && (
+                        {selectedSubDiagram === 'admin_verify_docs' && (
                           <g>
-                            <rect x="50" y="300" width="850" height="180" fill="none" stroke="#475569" strokeWidth="1.5" />
-                            <polygon points="50,300 110,300 120,315 50,315" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
-                            <text x="60" y="311" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="#000" className="dark:fill-white">Alt</text>
-                            <line x1="50" y1="390" x2="900" y2="390" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
-                            <text x="65" y="330" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[Lengkap/Lolos]</text>
-                            <text x="65" y="420" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[Revisi/Gagal]</text>
+                            <rect x="50" y="345" width="850" height="250" fill="none" stroke="#475569" strokeWidth="1.5" />
+                            <polygon points="50,345 110,345 120,360 50,360" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" className="dark:fill-[#11151c]" />
+                            <text x="60" y="356" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="currentColor" className="text-slate-900 dark:text-slate-100">Alt</text>
+                            <line x1="50" y1="465" x2="900" y2="465" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
+                            <text x="65" y="380" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[Lolos/Setuju]</text>
+                            <text x="65" y="495" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[Revisi/Tolak]</text>
                           </g>
                         )}
 
-                        {selectedSubDiagram === 'student' && (
-                          <>
-                            <g>
-                              <rect x="50" y="365" width="850" height="160" fill="none" stroke="#475569" strokeWidth="1.5" />
-                              <polygon points="50,365 110,365 120,380 50,380" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
-                              <text x="60" y="376" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="#000" className="dark:fill-white">Alt</text>
-                              <line x1="50" y1="455" x2="900" y2="455" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
-                              <text x="65" y="395" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#0ea5e9">[valid]</text>
-                              <text x="65" y="475" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[invalid]</text>
-                            </g>
-                            <g>
-                              <rect x="50" y="755" width="850" height="160" fill="none" stroke="#475569" strokeWidth="1.5" />
-                              <polygon points="50,755 110,755 120,770 50,770" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
-                              <text x="60" y="766" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="#000" className="dark:fill-white">Alt</text>
-                              <line x1="50" y1="840" x2="900" y2="840" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
-                              <text x="65" y="785" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[Lulus / Accepted]</text>
-                              <text x="65" y="865" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[Gagal / Rejected]</text>
-                            </g>
-                            <g>
-                              <rect x="50" y="1050" width="850" height="160" fill="none" stroke="#475569" strokeWidth="1.5" />
-                              <polygon points="50,1050 110,1050 120,1065 50,1065" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
-                              <text x="60" y="1061" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="#000" className="dark:fill-white">Alt</text>
-                              <line x1="50" y1="1150" x2="900" y2="1150" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
-                              <text x="65" y="1080" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[UKT Valid]</text>
-                              <text x="65" y="1175" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[UKT Invalid]</text>
-                            </g>
-                          </>
+                        {selectedSubDiagram === 'admin_verify_test' && (
+                          <g>
+                            <rect x="50" y="345" width="850" height="110" fill="none" stroke="#475569" strokeWidth="1.5" />
+                            <polygon points="50,345 110,345 120,360 50,360" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" className="dark:fill-[#11151c]" />
+                            <text x="60" y="356" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="currentColor" className="text-slate-900 dark:text-slate-100">Alt</text>
+                            <line x1="50" y1="395" x2="900" y2="395" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
+                            <text x="65" y="380" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[Skor &gt;= Passing Grade (Lulus)]</text>
+                            <text x="65" y="425" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[Skor &lt; Passing Grade (Gagal)]</text>
+                          </g>
+                        )}
+
+                        {selectedSubDiagram === 'student_complete' && (
+                          <g>
+                            <rect x="50" y="500" width="850" height="180" fill="none" stroke="#475569" strokeWidth="1.5" />
+                            <polygon points="50,500 110,500 120,515 50,515" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" className="dark:fill-[#11151c]" />
+                            <text x="60" y="511" fontFamily="monospace" fontSize="9" fontWeight="bold" fill="currentColor" className="text-slate-900 dark:text-slate-100">Alt</text>
+                            <line x1="50" y1="585" x2="900" y2="585" stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 4" />
+                            <text x="65" y="535" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#10b981">[UKT Lunas (Selesai)]</text>
+                            <text x="65" y="620" fontFamily="monospace" fontSize="10" fontWeight="bold" fill="#f43f5e">[Ulangi Pendaftaran]</text>
+                          </g>
                         )}
 
                       </svg>
@@ -3273,7 +3444,7 @@ export default function AdminDiagrams() {
                       {/* ACTIVE INTERACTIVE MESSAGES */}
                       <div 
                         className="relative z-10 w-[960px] transition-all duration-300" 
-                        style={{ height: selectedSubDiagram === 'auth' ? '750px' : selectedSubDiagram === 'admin' ? '780px' : '1260px' }}
+                        style={{ height: `${getSequenceCanvasHeight(selectedSubDiagram)}px` }}
                       >
                         {sequenceSteps.map((step) => {
                           const isPhaseVisible = seqActivePhase === 'all' || step.phase === seqActivePhase;
