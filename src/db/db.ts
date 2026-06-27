@@ -205,11 +205,33 @@ export async function getDb() {
       
       // Ensure specific columns exist
       const cols = sqlite.prepare("PRAGMA table_info(applications)").all() as any[];
-      if (!cols.find(c => c.name === 'email')) {
-        sqlite.exec("ALTER TABLE applications ADD COLUMN email TEXT;");
-      }
-      if (!cols.find(c => c.name === 're_registration_paid')) {
-        sqlite.exec("ALTER TABLE applications ADD COLUMN re_registration_paid INTEGER DEFAULT 0;");
+      
+      const sqliteMissingCols = [
+        { name: 'email', type: 'TEXT' },
+        { name: 're_registration_paid', type: 'INTEGER DEFAULT 0' },
+        { name: 'selection_code', type: 'TEXT' },
+        { name: 'participant_number', type: 'TEXT' },
+        { name: 'score', type: 'INTEGER' },
+        { name: 'birth_place', type: 'TEXT' },
+        { name: 'birth_date', type: 'TEXT' },
+        { name: 'gender', type: 'TEXT' },
+        { name: 'address', type: 'TEXT' },
+        { name: 'phone', type: 'TEXT' },
+        { name: 'previous_school', type: 'TEXT' },
+        { name: 'grad_year', type: 'TEXT' },
+        { name: 'major', type: 'TEXT' },
+        { name: 'submitted_at', type: 'DATETIME' }
+      ];
+
+      for (const col of sqliteMissingCols) {
+        if (!cols.find(c => c.name === col.name)) {
+          try {
+            sqlite.exec(`ALTER TABLE applications ADD COLUMN ${col.name} ${col.type};`);
+            console.log(`✅ Ditambahkan kolom SQLite '${col.name}'`);
+          } catch (e: any) {
+            console.warn(`⚠️ Gagal menambah kolom SQLite ${col.name}: ${e.message}`);
+          }
+        }
       }
 
       sqlite.exec(`
